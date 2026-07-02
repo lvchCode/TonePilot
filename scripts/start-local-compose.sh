@@ -8,6 +8,13 @@ LOG_DIR="${ROOT_DIR}/logs"
 BACKEND_LOG="${LOG_DIR}/backend-compose.log"
 
 cd "${ROOT_DIR}"
+if [ -f "${ROOT_DIR}/.env.local" ]; then
+  echo "加载本地配置：${ROOT_DIR}/.env.local"
+  set -a
+  # shellcheck disable=SC1091
+  source "${ROOT_DIR}/.env.local"
+  set +a
+fi
 mkdir -p "${LOG_DIR}"
 
 echo "启动 Docker Compose 依赖：MySQL、Redis、MinIO、Milvus"

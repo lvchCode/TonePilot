@@ -141,6 +141,13 @@ public class FileLightroomToolRepository implements LightroomToolRepository {
             if (result.containsKey("localMaskNeedsUserPlacement")) {
                 response.put("localMaskNeedsUserPlacement", result.get("localMaskNeedsUserPlacement"));
             }
+            if ("true".equals(String.valueOf(result.get("localMaskNeedsUserPlacement")))) {
+                response.put("localMaskStatus", "needs_user_placement");
+                response.put("localMaskStatusText", "局部蒙版已下发到 Lightroom，但需要你在蒙版面板中确认区域位置。");
+            } else if (result.containsKey("localMaskCreatedCount")) {
+                response.put("localMaskStatus", "created_or_not_required");
+                response.put("localMaskStatusText", "Lightroom 已处理本轮局部蒙版任务。");
+            }
             return response;
         } catch (Exception exception) {
             traceLogger.error("lightroom.apply.result.read_failed", jobId, Map.of(

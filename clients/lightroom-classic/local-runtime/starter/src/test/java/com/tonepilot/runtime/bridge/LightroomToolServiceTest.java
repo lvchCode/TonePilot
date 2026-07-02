@@ -172,4 +172,32 @@ class LightroomToolServiceTest {
         assertThat(status).containsEntry("localMaskNeedsUserPlacement", "true");
     }
 
+
+    @Test
+    void applyStatusMarksLocalMaskJobsThatNeedUserPlacement() throws Exception {
+        RuntimeProperties properties = new RuntimeProperties();
+        properties.getBridge().setRoot(tempDir.toString());
+        properties.getBridge().setLightroomRoot(tempDir.toString());
+        Files.createDirectories(tempDir.resolve("apply-results"));
+        Files.writeString(tempDir.resolve("apply-results/job-local.result"), String.join("\n",
+                "success=true",
+                "message=线性渐变蒙版需要在 Lightroom 中确认位置",
+                "previewUrl=/files/job-local.jpg",
+                "localGuideMessage=已打开 Masking 面板，请确认天空线性渐变范围",
+                "localAdjustmentCount=1",
+                "localMaskCreatedCount=0",
+                "localMaskNeedsUserPlacement=true"
+        ));
+
+        FileLightroomToolRepository repository = new FileLightroomToolRepository();
+        ReflectionTestUtils.setField(repository, "properties", properties);
+        ReflectionTestUtils.setField(repository, "traceLogger", mock(RuntimeTraceLogger.class));
+
+        Map<String, Object> status = repository.applyStatus("job-local");
+
+        assertThat(status).containsEntry("localMaskStatus", "needs_user_placement");
+        assertThat(status).containsEntry("localMaskStatusText", "局部蒙版已下发到 Lightroom，但需要你在蒙版面板中确认区域位置。");
+        assertThat(status).containsEntry("localMaskNeedsUserPlacement", "true");
+    }
+
 }

@@ -21,6 +21,8 @@ import com.tonepilot.starter.*;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -151,5 +153,40 @@ class AgentConsolePageTest {
         assertThat(html).contains("versions");
     }
 
+
+
+    @Test
+    void showsLocalMaskPlacementStateAndKeepsSingleRequestBody() throws Exception {
+        String html;
+        try (var input = getClass().getResourceAsStream("/static/agent-console.html")) {
+            assertThat(input).isNotNull();
+            html = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+        }
+
+        assertThat(html).contains("localMaskNeedsUserPlacement");
+        assertThat(html).contains("局部蒙版需要你在 Lightroom 中确认区域位置");
+        assertThat(html).contains("局部蒙版已下发");
+        assertThat(html.indexOf("body: JSON.stringify({ message")).isEqualTo(html.lastIndexOf("body: JSON.stringify({ message"));
+    }
+
+    @Test
+    void lightroomPluginUsesMaskingToolForLocalAdjustments() throws Exception {
+        Path pluginPath = findProjectRoot().resolve("clients/lightroom-classic/plugin/TonePilotLightroomBridge.lrplugin/BridgeWorker.lua");
+        String lua = Files.readString(pluginPath);
+
+        assertThat(lua).contains("selectTool(\"masking\")");
+        assertThat(lua).doesNotContain("selectTool(\"localized\")");
+    }
+
+    private Path findProjectRoot() {
+        Path cursor = Path.of(System.getProperty("user.dir")).toAbsolutePath();
+        while (cursor != null) {
+            if (Files.exists(cursor.resolve("clients/lightroom-classic/plugin/TonePilotLightroomBridge.lrplugin/BridgeWorker.lua"))) {
+                return cursor;
+            }
+            cursor = cursor.getParent();
+        }
+        throw new IllegalStateException("无法定位 TonePilot 项目根目录");
+    }
 
 }

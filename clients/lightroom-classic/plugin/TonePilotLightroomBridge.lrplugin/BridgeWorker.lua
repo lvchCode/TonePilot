@@ -13,7 +13,7 @@ local BridgeWorker = {
     running = false
 }
 
-local WORKER_BUILD = 23
+local WORKER_BUILD = 24
 local lastPreviewKey = ""
 local lastPreviewAt = 0
 local lastMetadataDebugKey = ""
@@ -147,19 +147,37 @@ function switchToDevelopModule()
 end
 
 function selectLocalAdjustmentTool(maskType)
-    local ok, message = LrTasks.pcall(function()
-        if maskType == "linear_gradient" then
+    local ok = false
+    local toolAttempts = {}
+
+    local function tryTool(label, fn)
+        local attemptOk, attemptMessage = LrTasks.pcall(fn)
+        if attemptOk then
+            ok = true
+            return true
+        end
+        table.insert(toolAttempts, label .. "=" .. tostring(attemptMessage))
+        return false
+    end
+
+    if maskType == "linear_gradient" and type(LrDevelopController.goToDevelopGraduatedFilter) == "function" then
+        tryTool("goToDevelopGraduatedFilter", function()
             LrDevelopController.goToDevelopGraduatedFilter()
-            return
-        end
-        if maskType == "radial_gradient" then
+        end)
+    elseif maskType == "radial_gradient" and type(LrDevelopController.goToDevelopRadialFilter) == "function" then
+        tryTool("goToDevelopRadialFilter", function()
             LrDevelopController.goToDevelopRadialFilter()
-            return
-        end
-        LrDevelopController.selectTool("localized")
-    end)
+        end)
+    end
+
     if not ok then
-        writeDiagnostic("local-adjustment-tool-error.txt", tostring(maskType) .. "=" .. tostring(message))
+        tryTool("selectTool(masking)", function()
+            LrDevelopController.selectTool("masking")
+        end)
+    end
+
+    if not ok then
+        writeDiagnostic("local-adjustment-tool-error.txt", tostring(maskType) .. "=" .. table.concat(toolAttempts, " | "))
     end
     LrTasks.sleep(0.15)
     return ok
@@ -907,6 +925,18 @@ function writeApplyResult(job, success, message)
     local content = "success=" .. tostring(success) .. "\nmessage=" .. sanitizeLine(message) .. "\n"
     if job.previewUrl ~= nil and tostring(job.previewUrl) ~= "" then
         content = content .. "previewUrl=" .. sanitizeLine(job.previewUrl) .. "\n"
+    end
+    if job.localGuideMessage ~= nil and tostring(job.localGuideMessage) ~= "" then
+        content = content .. "localGuideMessage=" .. sanitizeLine(job.localGuideMessage) .. "\n"
+    end
+    if job.localAdjustmentCount ~= nil then
+        content = content .. "localAdjustmentCount=" .. tostring(job.localAdjustmentCount) .. "\n"
+    end
+    if job.localMaskCreatedCount ~= nil then
+        content = content .. "localMaskCreatedCount=" .. tostring(job.localMaskCreatedCount) .. "\n"
+    end
+    if job.localMaskNeedsUserPlacement ~= nil then
+        content = content .. "localMaskNeedsUserPlacement=" .. tostring(job.localMaskNeedsUserPlacement) .. "\n"
     end
     writeFile(job.resultPath, content)
 end

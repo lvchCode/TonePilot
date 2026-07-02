@@ -1262,7 +1262,7 @@
         knowledge ? '<div class="agent-block"><strong>参考知识</strong><ul>' + knowledge + '</ul></div>' : '',
         deltas ? '<div class="agent-block"><strong>本轮调整</strong><div class="deltas">' + deltas + '</div></div>' : '',
         localPlans ? '<div class="agent-block"><strong>局部蒙版计划</strong><div class="deltas">' + localPlans + '</div></div>' : '',
-        data.action === 'tool_submitted' ? '<div class="agent-block">正在应用到 Lightroom，完成后会刷新修图后预览。</div>' : '',
+        data.action === 'tool_submitted' ? '<div class="agent-block">正在应用到 Lightroom；如果包含局部蒙版，插件会打开 Masking 面板，必要时会提示你确认区域位置。</div>' : '',
         suggestedReplies ? '<div class="agent-actions">' + suggestedReplies + '</div>' : ''
       ].join(''))
       chat.querySelectorAll('button[data-reply]').forEach(button => {
@@ -1354,12 +1354,18 @@
           if (!afterUrl) afterUrl = await fetchFreshSelectedPreviewAfterApply(jobId, startedAt)
           completeApplyComparison(jobId, afterUrl)
           const localGuideMessage = result.localGuideMessage ? '<br />局部工具：' + escapeHtml(localizeParamText(result.localGuideMessage)) : ''
+          const localPlacementMessage = result.localMaskNeedsUserPlacement === 'true' || result.localMaskNeedsUserPlacement === true
+            ? '<br /><strong>局部蒙版需要你在 Lightroom 中确认区域位置。</strong>'
+            : ''
+          const localStatusText = result.localMaskStatusText
+            ? '<br />' + escapeHtml(result.localMaskStatusText)
+            : (localPlacementMessage ? '<br />局部蒙版已下发到 Lightroom，但需要你在蒙版面板中确认区域位置。' : '')
           if (afterUrl) {
-            addMessage('agent', 'Lightroom 已完成调色，左侧已更新本轮修图后预览。你可以继续说“再亮一点”“绿色别那么脏”来微调。' + localGuideMessage)
+            addMessage('agent', 'Lightroom 已完成可自动执行的调色，左侧已更新本轮修图后预览。你可以继续说“再亮一点”“绿色别那么脏”来微调。' + localPlacementMessage + localStatusText + localGuideMessage)
           } else {
-            addMessage('agent', 'Lightroom 已完成调色，但插件没有返回本轮修图后预览。请在 Lightroom 中查看效果，或重新载入插件后再试。' + localGuideMessage)
+            addMessage('agent', 'Lightroom 已完成可自动执行的调色，但插件没有返回本轮修图后预览。请在 Lightroom 中查看效果，或重新载入插件后再试。' + localPlacementMessage + localStatusText + localGuideMessage)
           }
-          setStatus(photoStatus, 'Lightroom 已完成调色', 'ok')
+          setStatus(photoStatus, result.localMaskNeedsUserPlacement === 'true' || result.localMaskNeedsUserPlacement === true ? '局部蒙版等待确认' : 'Lightroom 已完成调色', result.localMaskNeedsUserPlacement === 'true' || result.localMaskNeedsUserPlacement === true ? 'warn' : 'ok')
           await pollPhoto()
         } catch (error) {
           window.clearInterval(timer)

@@ -19,7 +19,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest(classes = TonePilotApplication.class, properties = {
         "tonepilot.persistence.enabled=false",
         "tonepilot.rate-limit.enabled=false",
-        "tonepilot.ingestion.video.command=printf 上传视频字幕：先压高光，再提高阴影，蓝色饱和度降低。",
+        "tonepilot.ingestion.video.transcript-override=上传视频字幕：先压高光，再提高阴影，蓝色饱和度降低。",
         "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration"
 })
 @AutoConfigureMockMvc

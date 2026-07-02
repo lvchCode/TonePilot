@@ -68,13 +68,13 @@ tonepilot:
         model: ${TONEPILOT_RERANK_MODEL:}
   ingestion:
     douyin:
-      command: ${TONEPILOT_DOUYIN_COMMAND:}
-      command-shell: ${TONEPILOT_DOUYIN_COMMAND_SHELL:false}
-      timeout-seconds: ${TONEPILOT_DOUYIN_TIMEOUT_SECONDS:900}
+      manual-notes-required: true
     video:
-      command: ${TONEPILOT_VIDEO_COMMAND:}
-      command-shell: ${TONEPILOT_VIDEO_COMMAND_SHELL:false}
+      skill-dir: ${TONEPILOT_VIDEO_SKILL_DIR:${VIDEO_TO_SUBTITLE_SUMMARY_SKILL_DIR:}}
+      ffmpeg-bin: ${TONEPILOT_VIDEO_FFMPEG_BIN:ffmpeg}
+      python-bin: ${TONEPILOT_VIDEO_PYTHON_BIN:python3}
       timeout-seconds: ${TONEPILOT_VIDEO_TIMEOUT_SECONDS:900}
+      transcript-override: ${TONEPILOT_VIDEO_TRANSCRIPT_OVERRIDE:}
   ai:
     provider: ${TONEPILOT_AI_PROVIDER:rule}
     fallback-enabled: ${TONEPILOT_AI_FALLBACK_ENABLED:true}

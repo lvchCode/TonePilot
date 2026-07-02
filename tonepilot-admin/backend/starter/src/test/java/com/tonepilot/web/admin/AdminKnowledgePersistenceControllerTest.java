@@ -18,7 +18,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest(classes = TonePilotApplication.class, properties = {
         "tonepilot.persistence.enabled=true",
         "tonepilot.rate-limit.enabled=false",
-        "tonepilot.ingestion.video.command=printf 上传视频字幕：降低高光，提升阴影，增加蓝色饱和度。",
+        "tonepilot.ingestion.video.transcript-override=上传视频字幕：降低高光，提升阴影，增加蓝色饱和度。",
         "spring.datasource.url=jdbc:h2:mem:tonepilot_knowledge_test;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
         "spring.datasource.username=sa",
         "spring.datasource.password=",

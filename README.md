@@ -203,43 +203,25 @@ export QWEN2_VISION_MODEL=你的_Qwen2_视觉模型
 
 ## 抖音调色教程导入知识库
 
-管理端支持把抖音调色教程导入为待审核知识。当前实现采用“外部命令适配器”模式：管理端后端负责创建来源、写入素材、调用大模型抽取知识；视频解析、下载和字幕转写由可配置命令完成。
+管理端支持把抖音调色教程导入为待审核知识。当前推荐两种入口：
 
-推荐接入 `video-to-subtitle-summary-skill`：
+1. `抖音视频链接`：粘贴分享链接，同时在备注里粘贴字幕、调色步骤或教程摘要。这个入口完全由 Java 服务处理，不再依赖仓库内的 Python 适配器。
+2. `上传抖音视频文件`：上传已经下载好的视频，管理端保存视频对象，由 Java 服务调用 `ffmpeg` 提取音频，再调用外部 `video-to-subtitle-summary-skill` 的 faster-whisper 转写脚本生成字幕，最后写入知识库。
+
+推荐安装外部转写 skill：
 
 ```bash
 git clone https://github.com/imlewc/video-to-subtitle-summary-skill.git ~/.codex/skills/video-to-subtitle-summary
 python3 ~/.codex/skills/video-to-subtitle-summary/scripts/install_faster_whisper.py
 ```
 
-然后配置 AI Douyin 或 TikHub。当前仓库内置的 `scripts/douyin-transcript-adapter.py` 已适配 AI Douyin：
+上传视频模式配置：
 
 ```bash
 export VIDEO_TO_SUBTITLE_SUMMARY_SKILL_DIR=$HOME/.codex/skills/video-to-subtitle-summary
-export VIDEO_INFO_PROVIDER=ai-douyin
-export AI_DOUYIN_API_BASE=https://ai-douyin.top9.cc
-export AI_DOUYIN_API_KEY=你的_AI_Douyin_Key
-export TONEPILOT_DOUYIN_COMMAND="python3 ../../scripts/douyin-transcript-adapter.py"
-export TONEPILOT_DOUYIN_COMMAND_SHELL=false
-export TONEPILOT_DOUYIN_TIMEOUT_SECONDS=900
-```
-
-未配置 `TONEPILOT_DOUYIN_COMMAND` 时，系统不会假装已经抓到字幕；只有在“备注/已知调色步骤”中粘贴了字幕或调色步骤时，才会作为手工素材导入。
-
-导入入口：
-
-```text
-管理端 -> 素材导入 -> 抖音视频链接 -> 导入抖音并生成知识
-```
-
-可以直接粘贴抖音分享文案，后端会自动提取其中的 `https://v.douyin.com/...` 链接。
-
-也可以不依赖第三方抖音解析平台，直接上传已经下载好的抖音视频文件。上传模式由管理端保存视频对象，再调用本地/服务器转写命令抽取字幕并写入知识库：
-
-```bash
-export VIDEO_TO_SUBTITLE_SUMMARY_SKILL_DIR=$HOME/.codex/skills/video-to-subtitle-summary
-export TONEPILOT_VIDEO_COMMAND="python3 ../../scripts/uploaded-video-transcript-adapter.py"
-export TONEPILOT_VIDEO_COMMAND_SHELL=false
+export TONEPILOT_VIDEO_SKILL_DIR=$VIDEO_TO_SUBTITLE_SUMMARY_SKILL_DIR
+export TONEPILOT_VIDEO_FFMPEG_BIN=ffmpeg
+export TONEPILOT_VIDEO_PYTHON_BIN=python3
 export TONEPILOT_VIDEO_TIMEOUT_SECONDS=900
 ```
 
@@ -249,9 +231,10 @@ export TONEPILOT_VIDEO_TIMEOUT_SECONDS=900
 - `video-to-subtitle-summary-skill` 的 faster-whisper 依赖：完成本地语音转写。
 - MySQL/H2 schema 中的 `knowledge_source`、`knowledge_material`、`knowledge_extraction_job`、`style_knowledge`、`knowledge_chunk` 表：保存来源、素材、抽取任务、知识草稿和检索分块。
 
-上传入口：
+导入入口：
 
 ```text
+管理端 -> 素材导入 -> 抖音视频链接 -> 导入抖音并生成知识
 管理端 -> 素材导入 -> 上传抖音视频文件 -> 上传视频并生成知识
 ```
 

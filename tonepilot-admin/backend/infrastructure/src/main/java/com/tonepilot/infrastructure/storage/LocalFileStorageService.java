@@ -1,41 +1,10 @@
 package com.tonepilot.infrastructure.storage;
 
-import com.tonepilot.domain.agent.*;
-import com.tonepilot.domain.agent.workflow.*;
-import com.tonepilot.domain.colorgrading.*;
-import com.tonepilot.domain.common.*;
-import com.tonepilot.domain.evaluation.*;
-import com.tonepilot.domain.knowledge.*;
-import com.tonepilot.domain.observability.*;
-import com.tonepilot.domain.photo.*;
-import com.tonepilot.domain.runtime.*;
-import com.tonepilot.domain.storage.*;
-import com.tonepilot.domain.style.*;
-import com.tonepilot.repository.observability.*;
-import com.tonepilot.repository.runtime.*;
-import com.tonepilot.infrastructure.agent.*;
-import com.tonepilot.infrastructure.ai.*;
-import com.tonepilot.infrastructure.ai.dto.*;
-import com.tonepilot.infrastructure.knowledge.douyin.*;
-import com.tonepilot.infrastructure.knowledge.rag.*;
-import com.tonepilot.infrastructure.knowledge.rag.config.*;
-import com.tonepilot.infrastructure.observability.*;
-import com.tonepilot.infrastructure.observability.config.*;
-import com.tonepilot.infrastructure.observability.repository.*;
-import com.tonepilot.infrastructure.runtime.repository.*;
-import com.tonepilot.infrastructure.shared.persistence.*;
-import com.tonepilot.infrastructure.storage.*;
-import com.tonepilot.infrastructure.storage.config.*;
-
-
-
-
-
-
-
-import org.springframework.beans.factory.annotation.Autowired;
-
+import com.tonepilot.domain.storage.ObjectStorageService;
+import com.tonepilot.domain.storage.StoredFile;
+import com.tonepilot.domain.storage.StoredObject;
 import com.tonepilot.infrastructure.storage.config.StorageProperties;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -48,6 +17,7 @@ import java.time.Instant;
 import java.util.Base64;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 
 @Service
 @ConditionalOnProperty(prefix = "tonepilot.storage", name = "type", havingValue = "local", matchIfMissing = true)
@@ -62,28 +32,30 @@ public class LocalFileStorageService implements ObjectStorageService {
 
     @Override
     public StoredFile storeImage(MultipartFile file, String folder) {
+        return storeFile(file, folder, Set.of("jpg", "jpeg", "png"), "图片文件不能为空", "MVP 阶段仅支持 JPG 和 PNG 文件");
+    }
+
+    @Override
+    public StoredFile storeFile(MultipartFile file, String folder, Set<String> allowedExtensions, String emptyMessage, String unsupportedMessage) {
         if (file == null || file.isEmpty()) {
-            throw new IllegalArgumentException("图片文件不能为空");
+            throw new IllegalArgumentException(emptyMessage);
         }
-        String originalName = Optional.ofNullable(file.getOriginalFilename()).orElse("image");
+        String originalName = Optional.ofNullable(file.getOriginalFilename()).orElse("file");
         String safeName = safeFileName(originalName);
         String extension = extensionOf(safeName);
-        if (!extension.equals("jpg") && !extension.equals("jpeg") && !extension.equals("png")) {
-            throw new IllegalArgumentException("MVP 阶段仅支持 JPG 和 PNG 文件");
+        if (allowedExtensions != null && !allowedExtensions.isEmpty() && !allowedExtensions.contains(extension)) {
+            throw new IllegalArgumentException(unsupportedMessage);
         }
-
         String storedName = Instant.now().toEpochMilli() + "_" + safeName;
         Path directory = storageRoot.resolve(folder).normalize();
         Path target = directory.resolve(storedName).normalize();
         ensureInsideRoot(target);
-
         try {
             Files.createDirectories(directory);
             file.transferTo(target);
         } catch (IOException exception) {
             throw new IllegalStateException("保存文件失败", exception);
         }
-
         return new StoredFile(storedName, "/files/" + folder + "/" + storedName, extension, target);
     }
 
@@ -174,14 +146,14 @@ public class LocalFileStorageService implements ObjectStorageService {
     }
 
     private String mediaType(Path path) {
-        String extension = extensionOf(path.getFileName().toString());
-        return switch (extension) {
+        return switch (extensionOf(path.getFileName().toString())) {
             case "jpg", "jpeg" -> "image/jpeg";
             case "png" -> "image/png";
             case "webp" -> "image/webp";
+            case "mp4", "m4v" -> "video/mp4";
+            case "mov" -> "video/quicktime";
+            case "webm" -> "video/webm";
             default -> "application/octet-stream";
         };
     }
 }
-
-

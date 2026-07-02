@@ -1,28 +1,14 @@
 package com.tonepilot.domain.storage;
 
-import com.tonepilot.domain.agent.*;
-import com.tonepilot.domain.agent.workflow.*;
-import com.tonepilot.domain.colorgrading.*;
-import com.tonepilot.domain.common.*;
-import com.tonepilot.domain.evaluation.*;
-import com.tonepilot.domain.knowledge.*;
-import com.tonepilot.domain.observability.*;
-import com.tonepilot.domain.photo.*;
-import com.tonepilot.domain.runtime.*;
-import com.tonepilot.domain.storage.*;
-import com.tonepilot.domain.style.*;
-
-
-
-
-
-
-
 import org.springframework.web.multipart.MultipartFile;
+
+import java.util.Set;
 
 public interface ObjectStorageService {
 
     StoredFile storeImage(MultipartFile file, String folder);
+
+    StoredFile storeFile(MultipartFile file, String folder, Set<String> allowedExtensions, String emptyMessage, String unsupportedMessage);
 
     String writeTextFile(String folder, String fileName, String content);
 

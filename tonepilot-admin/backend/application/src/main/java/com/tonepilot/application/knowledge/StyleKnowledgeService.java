@@ -1,59 +1,18 @@
 package com.tonepilot.application.knowledge;
 
-import com.tonepilot.application.agent.*;
-import com.tonepilot.application.agent.workflow.*;
-import com.tonepilot.application.agent.workflow.node.*;
-import com.tonepilot.application.controller.*;
-import com.tonepilot.application.controller.admin.*;
-import com.tonepilot.application.dto.*;
-import com.tonepilot.application.evaluation.*;
-import com.tonepilot.application.knowledge.*;
-import com.tonepilot.application.photo.*;
-import com.tonepilot.application.runtime.*;
-import com.tonepilot.application.style.*;
-import com.tonepilot.domain.agent.*;
-import com.tonepilot.domain.agent.workflow.*;
-import com.tonepilot.domain.colorgrading.*;
-import com.tonepilot.domain.common.*;
-import com.tonepilot.domain.evaluation.*;
-import com.tonepilot.domain.knowledge.*;
-import com.tonepilot.domain.observability.*;
-import com.tonepilot.domain.photo.*;
-import com.tonepilot.domain.runtime.*;
-import com.tonepilot.domain.storage.*;
-import com.tonepilot.domain.style.*;
-import com.tonepilot.repository.observability.*;
-import com.tonepilot.repository.runtime.*;
-import com.tonepilot.infrastructure.agent.*;
-import com.tonepilot.infrastructure.ai.*;
-import com.tonepilot.infrastructure.ai.dto.*;
-import com.tonepilot.infrastructure.knowledge.douyin.*;
-import com.tonepilot.infrastructure.knowledge.rag.*;
-import com.tonepilot.infrastructure.knowledge.rag.config.*;
-import com.tonepilot.infrastructure.observability.*;
-import com.tonepilot.infrastructure.observability.config.*;
-import com.tonepilot.infrastructure.observability.repository.*;
-import com.tonepilot.infrastructure.runtime.repository.*;
-import com.tonepilot.infrastructure.shared.persistence.*;
-import com.tonepilot.infrastructure.storage.*;
-import com.tonepilot.infrastructure.storage.config.*;
-
-
-
-
-
-
-
-import org.springframework.beans.factory.annotation.Autowired;
-
-import com.tonepilot.domain.agent.KnowledgeGenerationAgent;
-import com.tonepilot.infrastructure.ai.AiProviderContext;
-import com.tonepilot.domain.common.NotFoundException;
-import com.tonepilot.domain.style.ColorStyle;
-import com.tonepilot.domain.knowledge.StyleKnowledge;
-import com.tonepilot.domain.style.StyleSample;
-import com.tonepilot.infrastructure.shared.persistence.InMemoryTonePilotStore;
 import com.tonepilot.application.dto.StyleKnowledgeRequest;
+import com.tonepilot.application.style.StyleSampleService;
+import com.tonepilot.application.style.StyleService;
+import com.tonepilot.domain.agent.KnowledgeGenerationAgent;
+import com.tonepilot.domain.common.NotFoundException;
+import com.tonepilot.domain.knowledge.StyleKnowledge;
+import com.tonepilot.domain.style.ColorStyle;
+import com.tonepilot.domain.style.StyleSample;
+import com.tonepilot.infrastructure.ai.AiProviderContext;
+import com.tonepilot.infrastructure.knowledge.catalog.KnowledgeCatalogJdbcRepository;
+import com.tonepilot.infrastructure.shared.persistence.DomainSnapshotRepository;
+import com.tonepilot.infrastructure.shared.persistence.InMemoryTonePilotStore;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -70,6 +29,8 @@ public class StyleKnowledgeService {
     private final StyleSampleService styleSampleService;
     private final KnowledgeGenerationAgent knowledgeGenerationAgent;
     private final KnowledgeVectorIndexService knowledgeVectorIndexService;
+    private final DomainSnapshotRepository snapshotRepository;
+    private final KnowledgeCatalogJdbcRepository catalogRepository;
 
     @Autowired
     public StyleKnowledgeService(
@@ -77,13 +38,17 @@ public class StyleKnowledgeService {
             StyleService styleService,
             StyleSampleService styleSampleService,
             KnowledgeGenerationAgent knowledgeGenerationAgent,
-            KnowledgeVectorIndexService knowledgeVectorIndexService
+            KnowledgeVectorIndexService knowledgeVectorIndexService,
+            DomainSnapshotRepository snapshotRepository,
+            KnowledgeCatalogJdbcRepository catalogRepository
     ) {
         this.store = store;
         this.styleService = styleService;
         this.styleSampleService = styleSampleService;
         this.knowledgeGenerationAgent = knowledgeGenerationAgent;
         this.knowledgeVectorIndexService = knowledgeVectorIndexService;
+        this.snapshotRepository = snapshotRepository;
+        this.catalogRepository = catalogRepository;
     }
 
     public StyleKnowledge generateFromSample(Long sampleId) {
@@ -117,13 +82,12 @@ public class StyleKnowledgeService {
                 Instant.now(),
                 Instant.now()
         );
-        store.styleKnowledge.put(saved.id(), saved);
+        persist(saved);
         return saved;
     }
 
     public List<StyleKnowledge> list(String status) {
-        return store.styleKnowledge.values()
-                .stream()
+        return store.styleKnowledge.values().stream()
                 .filter(item -> status == null || status.isBlank() || item.status().equals(status))
                 .sorted(Comparator.comparing(StyleKnowledge::updatedAt).reversed())
                 .toList();
@@ -155,7 +119,7 @@ public class StyleKnowledgeService {
                 existing.createdAt(),
                 Instant.now()
         );
-        store.styleKnowledge.put(id, updated);
+        persist(updated);
         return updated;
     }
 
@@ -171,28 +135,6 @@ public class StyleKnowledgeService {
 
     public StyleKnowledge disable(Long id) {
         return changeStatus(id, "disabled");
-    }
-
-    private StyleKnowledge changeStatus(Long id, String status) {
-        StyleKnowledge existing = get(id);
-        StyleKnowledge updated = new StyleKnowledge(
-                existing.id(),
-                existing.styleId(),
-                existing.sampleId(),
-                existing.title(),
-                existing.scene(),
-                existing.targetStyle(),
-                existing.problems(),
-                existing.strategy(),
-                existing.paramRanges(),
-                existing.content(),
-                existing.embeddingId(),
-                status,
-                existing.createdAt(),
-                Instant.now()
-        );
-        store.styleKnowledge.put(id, updated);
-        return updated;
     }
 
     public StyleKnowledge createDraftFromMaterial(
@@ -221,13 +163,39 @@ public class StyleKnowledgeService {
                 Instant.now(),
                 Instant.now()
         );
-        store.styleKnowledge.put(saved.id(), saved);
+        persist(saved);
         return saved;
+    }
+
+    private StyleKnowledge changeStatus(Long id, String status) {
+        StyleKnowledge existing = get(id);
+        StyleKnowledge updated = new StyleKnowledge(
+                existing.id(),
+                existing.styleId(),
+                existing.sampleId(),
+                existing.title(),
+                existing.scene(),
+                existing.targetStyle(),
+                existing.problems(),
+                existing.strategy(),
+                existing.paramRanges(),
+                existing.content(),
+                existing.embeddingId(),
+                status,
+                existing.createdAt(),
+                Instant.now()
+        );
+        persist(updated);
+        return updated;
+    }
+
+    private void persist(StyleKnowledge knowledge) {
+        store.styleKnowledge.put(knowledge.id(), knowledge);
+        snapshotRepository.save("style_knowledge", knowledge.id(), knowledge);
+        catalogRepository.saveStyleKnowledge(knowledge);
     }
 
     private String valueOr(String value, String fallback) {
         return value == null || value.isBlank() ? fallback : value;
     }
 }
-
-

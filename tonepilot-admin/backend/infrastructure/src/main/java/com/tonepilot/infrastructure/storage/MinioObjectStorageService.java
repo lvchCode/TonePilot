@@ -1,46 +1,15 @@
 package com.tonepilot.infrastructure.storage;
 
-import com.tonepilot.domain.agent.*;
-import com.tonepilot.domain.agent.workflow.*;
-import com.tonepilot.domain.colorgrading.*;
-import com.tonepilot.domain.common.*;
-import com.tonepilot.domain.evaluation.*;
-import com.tonepilot.domain.knowledge.*;
-import com.tonepilot.domain.observability.*;
-import com.tonepilot.domain.photo.*;
-import com.tonepilot.domain.runtime.*;
-import com.tonepilot.domain.storage.*;
-import com.tonepilot.domain.style.*;
-import com.tonepilot.repository.observability.*;
-import com.tonepilot.repository.runtime.*;
-import com.tonepilot.infrastructure.agent.*;
-import com.tonepilot.infrastructure.ai.*;
-import com.tonepilot.infrastructure.ai.dto.*;
-import com.tonepilot.infrastructure.knowledge.douyin.*;
-import com.tonepilot.infrastructure.knowledge.rag.*;
-import com.tonepilot.infrastructure.knowledge.rag.config.*;
-import com.tonepilot.infrastructure.observability.*;
-import com.tonepilot.infrastructure.observability.config.*;
-import com.tonepilot.infrastructure.observability.repository.*;
-import com.tonepilot.infrastructure.runtime.repository.*;
-import com.tonepilot.infrastructure.shared.persistence.*;
-import com.tonepilot.infrastructure.storage.*;
-import com.tonepilot.infrastructure.storage.config.*;
-
-
-
-
-
-
-
-import org.springframework.beans.factory.annotation.Autowired;
-
+import com.tonepilot.domain.storage.ObjectStorageService;
+import com.tonepilot.domain.storage.StoredFile;
+import com.tonepilot.domain.storage.StoredObject;
 import com.tonepilot.infrastructure.storage.config.StorageProperties;
 import io.minio.BucketExistsArgs;
 import io.minio.GetObjectArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -52,6 +21,7 @@ import java.time.Instant;
 import java.util.Base64;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 
 @Service
 @ConditionalOnProperty(prefix = "tonepilot.storage", name = "type", havingValue = "minio")
@@ -73,16 +43,20 @@ public class MinioObjectStorageService implements ObjectStorageService {
 
     @Override
     public StoredFile storeImage(MultipartFile file, String folder) {
+        return storeFile(file, folder, Set.of("jpg", "jpeg", "png"), "图片文件不能为空", "MVP 阶段仅支持 JPG 和 PNG 文件");
+    }
+
+    @Override
+    public StoredFile storeFile(MultipartFile file, String folder, Set<String> allowedExtensions, String emptyMessage, String unsupportedMessage) {
         if (file == null || file.isEmpty()) {
-            throw new IllegalArgumentException("图片文件不能为空");
+            throw new IllegalArgumentException(emptyMessage);
         }
-        String originalName = Optional.ofNullable(file.getOriginalFilename()).orElse("image");
+        String originalName = Optional.ofNullable(file.getOriginalFilename()).orElse("file");
         String safeName = safeFileName(originalName);
         String extension = extensionOf(safeName);
-        if (!extension.equals("jpg") && !extension.equals("jpeg") && !extension.equals("png")) {
-            throw new IllegalArgumentException("MVP 阶段仅支持 JPG 和 PNG 文件");
+        if (allowedExtensions != null && !allowedExtensions.isEmpty() && !allowedExtensions.contains(extension)) {
+            throw new IllegalArgumentException(unsupportedMessage);
         }
-
         String storedName = Instant.now().toEpochMilli() + "_" + safeName;
         String objectName = folder + "/" + storedName;
         try (InputStream inputStream = file.getInputStream()) {
@@ -96,7 +70,6 @@ public class MinioObjectStorageService implements ObjectStorageService {
         } catch (Exception exception) {
             throw new IllegalStateException("上传文件到 MinIO 失败", exception);
         }
-
         return new StoredFile(storedName, "/files/" + objectName, extension, null);
     }
 
@@ -168,13 +141,9 @@ public class MinioObjectStorageService implements ObjectStorageService {
     }
 
     private void ensureBucket() throws Exception {
-        if (bucketReady) {
-            return;
-        }
+        if (bucketReady) return;
         synchronized (this) {
-            if (bucketReady) {
-                return;
-            }
+            if (bucketReady) return;
             boolean exists = minioClient.bucketExists(BucketExistsArgs.builder().bucket(bucket).build());
             if (!exists) {
                 minioClient.makeBucket(MakeBucketArgs.builder().bucket(bucket).build());
@@ -215,9 +184,10 @@ public class MinioObjectStorageService implements ObjectStorageService {
             case "png" -> "image/png";
             case "webp" -> "image/webp";
             case "xmp" -> "application/xml";
+            case "mp4", "m4v" -> "video/mp4";
+            case "mov" -> "video/quicktime";
+            case "webm" -> "video/webm";
             default -> "application/octet-stream";
         };
     }
 }
-
-

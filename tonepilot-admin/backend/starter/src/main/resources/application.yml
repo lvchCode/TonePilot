@@ -71,6 +71,10 @@ tonepilot:
       command: ${TONEPILOT_DOUYIN_COMMAND:}
       command-shell: ${TONEPILOT_DOUYIN_COMMAND_SHELL:false}
       timeout-seconds: ${TONEPILOT_DOUYIN_TIMEOUT_SECONDS:900}
+    video:
+      command: ${TONEPILOT_VIDEO_COMMAND:}
+      command-shell: ${TONEPILOT_VIDEO_COMMAND_SHELL:false}
+      timeout-seconds: ${TONEPILOT_VIDEO_TIMEOUT_SECONDS:900}
   ai:
     provider: ${TONEPILOT_AI_PROVIDER:rule}
     fallback-enabled: ${TONEPILOT_AI_FALLBACK_ENABLED:true}

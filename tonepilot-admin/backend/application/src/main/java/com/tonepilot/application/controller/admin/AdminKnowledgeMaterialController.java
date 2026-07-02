@@ -1,60 +1,24 @@
 package com.tonepilot.application.controller.admin;
 
-import com.tonepilot.application.agent.*;
-import com.tonepilot.application.agent.workflow.*;
-import com.tonepilot.application.agent.workflow.node.*;
-import com.tonepilot.application.controller.*;
-import com.tonepilot.application.controller.admin.*;
-import com.tonepilot.application.dto.*;
-import com.tonepilot.application.evaluation.*;
-import com.tonepilot.application.knowledge.*;
-import com.tonepilot.application.photo.*;
-import com.tonepilot.application.runtime.*;
-import com.tonepilot.application.style.*;
-import com.tonepilot.domain.agent.*;
-import com.tonepilot.domain.agent.workflow.*;
-import com.tonepilot.domain.colorgrading.*;
-import com.tonepilot.domain.common.*;
-import com.tonepilot.domain.evaluation.*;
-import com.tonepilot.domain.knowledge.*;
-import com.tonepilot.domain.observability.*;
-import com.tonepilot.domain.photo.*;
-import com.tonepilot.domain.runtime.*;
-import com.tonepilot.domain.storage.*;
-import com.tonepilot.domain.style.*;
-import com.tonepilot.repository.observability.*;
-import com.tonepilot.repository.runtime.*;
-import com.tonepilot.infrastructure.agent.*;
-import com.tonepilot.infrastructure.ai.*;
-import com.tonepilot.infrastructure.ai.dto.*;
-import com.tonepilot.infrastructure.knowledge.douyin.*;
-import com.tonepilot.infrastructure.knowledge.rag.*;
-import com.tonepilot.infrastructure.knowledge.rag.config.*;
-import com.tonepilot.infrastructure.observability.*;
-import com.tonepilot.infrastructure.observability.config.*;
-import com.tonepilot.infrastructure.observability.repository.*;
-import com.tonepilot.infrastructure.runtime.repository.*;
-import com.tonepilot.infrastructure.shared.persistence.*;
-import com.tonepilot.infrastructure.storage.*;
-import com.tonepilot.infrastructure.storage.config.*;
-
-
-
-
-
-
-
 import com.tonepilot.application.dto.ApiResponse;
+import com.tonepilot.application.dto.KnowledgeMaterialRequest;
+import com.tonepilot.application.dto.KnowledgeSourceRequest;
+import com.tonepilot.application.knowledge.KnowledgeMaterialIngestionService;
+import com.tonepilot.domain.knowledge.DouyinImportRequest;
 import com.tonepilot.domain.knowledge.KnowledgeExtractionJob;
 import com.tonepilot.domain.knowledge.KnowledgeMaterial;
 import com.tonepilot.domain.knowledge.KnowledgeSource;
-import com.tonepilot.application.knowledge.KnowledgeMaterialIngestionService;
-import com.tonepilot.domain.knowledge.DouyinImportRequest;
-import com.tonepilot.application.dto.KnowledgeMaterialRequest;
-import com.tonepilot.application.dto.KnowledgeSourceRequest;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -79,6 +43,17 @@ public class AdminKnowledgeMaterialController {
     @PostMapping("/douyin-imports")
     public ApiResponse<KnowledgeExtractionJob> importDouyinVideo(@Valid @RequestBody DouyinImportRequest request) {
         return ApiResponse.ok(ingestionService.importDouyinVideo(request));
+    }
+
+    @PostMapping("/douyin-video-uploads")
+    public ApiResponse<KnowledgeExtractionJob> uploadDouyinVideo(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "title", required = false) String title,
+            @RequestParam(value = "author", required = false) String author,
+            @RequestParam(value = "styleId", required = false) Long styleId,
+            @RequestParam(value = "notes", required = false) String notes
+    ) {
+        return ApiResponse.ok(ingestionService.importUploadedDouyinVideo(file, title, author, styleId, notes));
     }
 
     @GetMapping("/{sourceId}/materials")

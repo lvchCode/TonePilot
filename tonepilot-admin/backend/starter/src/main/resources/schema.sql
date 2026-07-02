@@ -83,3 +83,76 @@ CREATE INDEX IF NOT EXISTS idx_audit_event_created_at ON audit_event(created_at)
 CREATE INDEX IF NOT EXISTS idx_domain_snapshot_type ON domain_snapshot(domain_type);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_runtime_device_fingerprint ON runtime_device(fingerprint);
 CREATE INDEX IF NOT EXISTS idx_runtime_event_user ON runtime_event(user_id, created_at);
+CREATE TABLE IF NOT EXISTS knowledge_source (
+    id BIGINT PRIMARY KEY,
+    source_type VARCHAR(64) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    author VARCHAR(128),
+    original_url VARCHAR(1024),
+    style_id BIGINT,
+    notes TEXT,
+    status VARCHAR(64),
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS knowledge_material (
+    id BIGINT PRIMARY KEY,
+    source_id BIGINT NOT NULL,
+    material_type VARCHAR(64) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    content TEXT NOT NULL,
+    language VARCHAR(32),
+    created_at TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS knowledge_extraction_job (
+    id BIGINT PRIMARY KEY,
+    source_id BIGINT NOT NULL,
+    material_id BIGINT NOT NULL,
+    status VARCHAR(64),
+    generated_knowledge_id BIGINT,
+    message TEXT,
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS style_knowledge (
+    id BIGINT PRIMARY KEY,
+    style_id BIGINT,
+    sample_id BIGINT,
+    title VARCHAR(255) NOT NULL,
+    scene VARCHAR(128),
+    target_style VARCHAR(128),
+    problems_json TEXT,
+    strategy_json TEXT,
+    param_ranges_json TEXT,
+    content TEXT,
+    embedding_id VARCHAR(128),
+    status VARCHAR(64),
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS knowledge_chunk (
+    id BIGINT PRIMARY KEY,
+    source_type VARCHAR(64) NOT NULL,
+    source_id BIGINT NOT NULL,
+    title VARCHAR(255),
+    content TEXT NOT NULL,
+    embedding_json TEXT,
+    created_at TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_knowledge_source_type ON knowledge_source(source_type);
+CREATE INDEX IF NOT EXISTS idx_knowledge_source_style ON knowledge_source(style_id);
+CREATE INDEX IF NOT EXISTS idx_knowledge_source_updated ON knowledge_source(updated_at);
+CREATE INDEX IF NOT EXISTS idx_knowledge_material_source ON knowledge_material(source_id);
+CREATE INDEX IF NOT EXISTS idx_knowledge_material_type ON knowledge_material(material_type);
+CREATE INDEX IF NOT EXISTS idx_knowledge_job_source ON knowledge_extraction_job(source_id);
+CREATE INDEX IF NOT EXISTS idx_knowledge_job_material ON knowledge_extraction_job(material_id);
+CREATE INDEX IF NOT EXISTS idx_knowledge_job_generated ON knowledge_extraction_job(generated_knowledge_id);
+CREATE INDEX IF NOT EXISTS idx_style_knowledge_status ON style_knowledge(status);
+CREATE INDEX IF NOT EXISTS idx_style_knowledge_style ON style_knowledge(style_id);
+CREATE INDEX IF NOT EXISTS idx_style_knowledge_scene ON style_knowledge(scene);
+CREATE INDEX IF NOT EXISTS idx_knowledge_chunk_source ON knowledge_chunk(source_type, source_id);

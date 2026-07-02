@@ -234,6 +234,27 @@ export TONEPILOT_DOUYIN_TIMEOUT_SECONDS=900
 
 可以直接粘贴抖音分享文案，后端会自动提取其中的 `https://v.douyin.com/...` 链接。
 
+也可以不依赖第三方抖音解析平台，直接上传已经下载好的抖音视频文件。上传模式由管理端保存视频对象，再调用本地/服务器转写命令抽取字幕并写入知识库：
+
+```bash
+export VIDEO_TO_SUBTITLE_SUMMARY_SKILL_DIR=$HOME/.codex/skills/video-to-subtitle-summary
+export TONEPILOT_VIDEO_COMMAND="python3 ../../scripts/uploaded-video-transcript-adapter.py"
+export TONEPILOT_VIDEO_COMMAND_SHELL=false
+export TONEPILOT_VIDEO_TIMEOUT_SECONDS=900
+```
+
+上传视频模式依赖：
+
+- `ffmpeg`：从视频中提取音频。
+- `video-to-subtitle-summary-skill` 的 faster-whisper 依赖：完成本地语音转写。
+- MySQL/H2 schema 中的 `knowledge_source`、`knowledge_material`、`knowledge_extraction_job`、`style_knowledge`、`knowledge_chunk` 表：保存来源、素材、抽取任务、知识草稿和检索分块。
+
+上传入口：
+
+```text
+管理端 -> 素材导入 -> 上传抖音视频文件 -> 上传视频并生成知识
+```
+
 ## 项目结构
 
 ```text

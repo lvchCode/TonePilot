@@ -1,51 +1,8 @@
 package com.tonepilot.application.knowledge;
 
-import com.tonepilot.application.agent.*;
-import com.tonepilot.application.agent.workflow.*;
-import com.tonepilot.application.agent.workflow.node.*;
-import com.tonepilot.application.controller.*;
-import com.tonepilot.application.controller.admin.*;
-import com.tonepilot.application.dto.*;
-import com.tonepilot.application.evaluation.*;
-import com.tonepilot.application.knowledge.*;
-import com.tonepilot.application.photo.*;
-import com.tonepilot.application.runtime.*;
-import com.tonepilot.application.style.*;
-import com.tonepilot.domain.agent.*;
-import com.tonepilot.domain.agent.workflow.*;
-import com.tonepilot.domain.colorgrading.*;
-import com.tonepilot.domain.common.*;
-import com.tonepilot.domain.evaluation.*;
-import com.tonepilot.domain.knowledge.*;
-import com.tonepilot.domain.observability.*;
-import com.tonepilot.domain.photo.*;
-import com.tonepilot.domain.runtime.*;
-import com.tonepilot.domain.storage.*;
-import com.tonepilot.domain.style.*;
-import com.tonepilot.repository.observability.*;
-import com.tonepilot.repository.runtime.*;
-import com.tonepilot.infrastructure.agent.*;
-import com.tonepilot.infrastructure.ai.*;
-import com.tonepilot.infrastructure.ai.dto.*;
-import com.tonepilot.infrastructure.knowledge.douyin.*;
-import com.tonepilot.infrastructure.knowledge.rag.*;
-import com.tonepilot.infrastructure.knowledge.rag.config.*;
-import com.tonepilot.infrastructure.observability.*;
-import com.tonepilot.infrastructure.observability.config.*;
-import com.tonepilot.infrastructure.observability.repository.*;
-import com.tonepilot.infrastructure.runtime.repository.*;
-import com.tonepilot.infrastructure.shared.persistence.*;
-import com.tonepilot.infrastructure.storage.*;
-import com.tonepilot.infrastructure.storage.config.*;
-
-
-
-
-
-
-
 import com.tonepilot.domain.knowledge.KnowledgeChunk;
 import com.tonepilot.domain.knowledge.StyleKnowledge;
+import com.tonepilot.infrastructure.knowledge.catalog.KnowledgeCatalogJdbcRepository;
 import com.tonepilot.infrastructure.shared.persistence.InMemoryTonePilotStore;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -62,6 +19,9 @@ public class KnowledgeVectorIndexService {
 
     @Autowired
     private InMemoryTonePilotStore store;
+
+    @Autowired
+    private KnowledgeCatalogJdbcRepository catalogRepository;
 
     public List<KnowledgeChunk> indexStyleKnowledge(StyleKnowledge knowledge) {
         store.knowledgeChunks.values().removeIf(chunk ->
@@ -82,6 +42,7 @@ public class KnowledgeVectorIndexService {
             store.knowledgeChunks.put(chunk.id(), chunk);
             indexed.add(chunk);
         }
+        catalogRepository.replaceKnowledgeChunks(knowledge.id(), indexed);
         return indexed;
     }
 
@@ -101,8 +62,7 @@ public class KnowledgeVectorIndexService {
         if (left == null || right == null || left.isEmpty() || right.isEmpty()) {
             return 0;
         }
-        return left.entrySet()
-                .stream()
+        return left.entrySet().stream()
                 .mapToDouble(entry -> entry.getValue() * right.getOrDefault(entry.getKey(), 0.0))
                 .sum();
     }

@@ -1,88 +1,56 @@
 package com.tonepilot.application.knowledge;
 
-import com.tonepilot.application.agent.*;
-import com.tonepilot.application.agent.workflow.*;
-import com.tonepilot.application.agent.workflow.node.*;
-import com.tonepilot.application.controller.*;
-import com.tonepilot.application.controller.admin.*;
-import com.tonepilot.application.dto.*;
-import com.tonepilot.application.evaluation.*;
-import com.tonepilot.application.knowledge.*;
-import com.tonepilot.application.photo.*;
-import com.tonepilot.application.runtime.*;
-import com.tonepilot.application.style.*;
-import com.tonepilot.domain.agent.*;
-import com.tonepilot.domain.agent.workflow.*;
-import com.tonepilot.domain.colorgrading.*;
-import com.tonepilot.domain.common.*;
-import com.tonepilot.domain.evaluation.*;
-import com.tonepilot.domain.knowledge.*;
-import com.tonepilot.domain.observability.*;
-import com.tonepilot.domain.photo.*;
-import com.tonepilot.domain.runtime.*;
-import com.tonepilot.domain.storage.*;
-import com.tonepilot.domain.style.*;
-import com.tonepilot.repository.observability.*;
-import com.tonepilot.repository.runtime.*;
-import com.tonepilot.infrastructure.agent.*;
-import com.tonepilot.infrastructure.ai.*;
-import com.tonepilot.infrastructure.ai.dto.*;
-import com.tonepilot.infrastructure.knowledge.douyin.*;
-import com.tonepilot.infrastructure.knowledge.rag.*;
-import com.tonepilot.infrastructure.knowledge.rag.config.*;
-import com.tonepilot.infrastructure.observability.*;
-import com.tonepilot.infrastructure.observability.config.*;
-import com.tonepilot.infrastructure.observability.repository.*;
-import com.tonepilot.infrastructure.runtime.repository.*;
-import com.tonepilot.infrastructure.shared.persistence.*;
-import com.tonepilot.infrastructure.storage.*;
-import com.tonepilot.infrastructure.storage.config.*;
-
-
-
-
-
-
-
+import com.tonepilot.application.dto.KnowledgeMaterialRequest;
+import com.tonepilot.application.dto.KnowledgeSourceRequest;
 import com.tonepilot.domain.common.NotFoundException;
-import com.tonepilot.infrastructure.ai.AiProperties;
-import com.tonepilot.infrastructure.ai.OpenAiCompatibleModelClient;
-import com.tonepilot.infrastructure.ai.dto.StyleKnowledgeModelOutput;
+import com.tonepilot.domain.knowledge.DouyinImportRequest;
 import com.tonepilot.domain.knowledge.KnowledgeExtractionJob;
 import com.tonepilot.domain.knowledge.KnowledgeMaterial;
 import com.tonepilot.domain.knowledge.KnowledgeSource;
 import com.tonepilot.domain.knowledge.StyleKnowledge;
+import com.tonepilot.domain.storage.ObjectStorageService;
+import com.tonepilot.domain.storage.StoredFile;
+import com.tonepilot.infrastructure.ai.AiProperties;
+import com.tonepilot.infrastructure.ai.OpenAiCompatibleModelClient;
+import com.tonepilot.infrastructure.ai.dto.StyleKnowledgeModelOutput;
+import com.tonepilot.infrastructure.knowledge.catalog.KnowledgeCatalogJdbcRepository;
+import com.tonepilot.infrastructure.knowledge.douyin.DouyinTranscriptService;
+import com.tonepilot.infrastructure.knowledge.douyin.VideoTranscriptService;
 import com.tonepilot.infrastructure.shared.persistence.DomainSnapshotRepository;
 import com.tonepilot.infrastructure.shared.persistence.InMemoryTonePilotStore;
-import com.tonepilot.domain.knowledge.DouyinImportRequest;
-import com.tonepilot.application.dto.KnowledgeMaterialRequest;
-import com.tonepilot.application.dto.KnowledgeSourceRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 public class KnowledgeMaterialIngestionService {
 
+    private static final Set<String> VIDEO_EXTENSIONS = Set.of("mp4", "mov", "m4v", "webm");
+
     @Autowired
     private InMemoryTonePilotStore store;
-
     @Autowired
     private StyleKnowledgeService styleKnowledgeService;
-
     @Autowired
     private DomainSnapshotRepository snapshotRepository;
-
+    @Autowired
+    private KnowledgeCatalogJdbcRepository catalogRepository;
     @Autowired
     private DouyinTranscriptService douyinTranscriptService;
-
+    @Autowired
+    private VideoTranscriptService videoTranscriptService;
+    @Autowired
+    private ObjectStorageService storageService;
     @Autowired
     private AiProperties aiProperties;
-
     @Autowired
     private OpenAiCompatibleModelClient modelClient;
 
@@ -100,14 +68,12 @@ public class KnowledgeMaterialIngestionService {
                 now,
                 now
         );
-        store.knowledgeSources.put(source.id(), source);
-        snapshotRepository.save("knowledge_source", source.id(), source);
+        persistSource(source);
         return source;
     }
 
     public List<KnowledgeSource> listSources() {
-        return store.knowledgeSources.values()
-                .stream()
+        return store.knowledgeSources.values().stream()
                 .sorted(Comparator.comparing(KnowledgeSource::updatedAt).reversed())
                 .toList();
     }
@@ -123,15 +89,13 @@ public class KnowledgeMaterialIngestionService {
                 trimOrDefault(request.language(), "zh-CN"),
                 Instant.now()
         );
-        store.knowledgeMaterials.put(material.id(), material);
-        snapshotRepository.save("knowledge_material", material.id(), material);
+        persistMaterial(material);
         return material;
     }
 
     public List<KnowledgeMaterial> listMaterials(Long sourceId) {
         getSource(sourceId);
-        return store.knowledgeMaterials.values()
-                .stream()
+        return store.knowledgeMaterials.values().stream()
                 .filter(item -> item.sourceId().equals(sourceId))
                 .sorted(Comparator.comparing(KnowledgeMaterial::createdAt).reversed())
                 .toList();
@@ -156,6 +120,55 @@ public class KnowledgeMaterialIngestionService {
         return extractToKnowledge(source.id(), material.id());
     }
 
+    public KnowledgeExtractionJob importUploadedDouyinVideo(MultipartFile file, String title, String author, Long styleId, String notes) {
+        StoredFile storedFile = storageService.storeFile(
+                file,
+                "knowledge-videos",
+                VIDEO_EXTENSIONS,
+                "视频文件不能为空",
+                "仅支持 MP4、MOV、M4V、WEBM 视频文件"
+        );
+        Path transcribePath = storedFile.path();
+        boolean temporaryCopy = false;
+        try {
+            if (transcribePath == null) {
+                transcribePath = Files.createTempFile("tonepilot-video-", "." + storedFile.fileType());
+                Files.write(transcribePath, storageService.readObject(storedFile.fileUrl()).bytes());
+                temporaryCopy = true;
+            }
+            String sourceTitle = trimOrDefault(title, "上传抖音调色教程");
+            String transcript = videoTranscriptService.transcribeVideo(transcribePath, storedFile.fileName(), sourceTitle, author, notes);
+            KnowledgeSource source = createSource(new KnowledgeSourceRequest(
+                    "douyin_uploaded_video",
+                    sourceTitle,
+                    trimOrDefault(author, "未知作者"),
+                    storedFile.fileUrl(),
+                    styleId,
+                    buildUploadedVideoNotes(notes, storedFile)
+            ));
+            KnowledgeMaterial material = importMaterial(source.id(), new KnowledgeMaterialRequest(
+                    "transcript",
+                    source.title() + " 上传视频字幕/摘要",
+                    transcript,
+                    "zh-CN"
+            ));
+            return extractToKnowledge(source.id(), material.id());
+        } catch (Exception exception) {
+            if (exception instanceof IllegalStateException stateException) {
+                throw stateException;
+            }
+            throw new IllegalStateException("上传视频导入知识失败：" + exception.getMessage(), exception);
+        } finally {
+            if (temporaryCopy && transcribePath != null) {
+                try {
+                    Files.deleteIfExists(transcribePath);
+                } catch (Exception ignored) {
+                    // 临时文件清理失败不影响导入结果。
+                }
+            }
+        }
+    }
+
     public KnowledgeExtractionJob extractToKnowledge(Long sourceId, Long materialId) {
         KnowledgeSource source = getSource(sourceId);
         KnowledgeMaterial material = getMaterial(source.id(), materialId);
@@ -173,6 +186,7 @@ public class KnowledgeMaterialIngestionService {
         );
         store.knowledgeExtractionJobs.put(job.id(), job);
         snapshotRepository.save("knowledge_extraction_job", job.id(), job);
+        catalogRepository.saveExtractionJob(job);
         return job;
     }
 
@@ -220,6 +234,18 @@ public class KnowledgeMaterialIngestionService {
         );
     }
 
+    private void persistSource(KnowledgeSource source) {
+        store.knowledgeSources.put(source.id(), source);
+        snapshotRepository.save("knowledge_source", source.id(), source);
+        catalogRepository.saveSource(source);
+    }
+
+    private void persistMaterial(KnowledgeMaterial material) {
+        store.knowledgeMaterials.put(material.id(), material);
+        snapshotRepository.save("knowledge_material", material.id(), material);
+        catalogRepository.saveMaterial(material);
+    }
+
     private KnowledgeSource getSource(Long sourceId) {
         KnowledgeSource source = store.knowledgeSources.get(sourceId);
         if (source == null) {
@@ -238,25 +264,15 @@ public class KnowledgeMaterialIngestionService {
 
     private String inferScene(KnowledgeSource source, KnowledgeMaterial material) {
         String text = source.title() + " " + material.content();
-        if (text.contains("夜景")) {
-            return "夜景";
-        }
-        if (text.contains("人像")) {
-            return "人像";
-        }
-        if (text.contains("风光") || text.contains("城市")) {
-            return "风光";
-        }
+        if (text.contains("夜景")) return "夜景";
+        if (text.contains("人像")) return "人像";
+        if (text.contains("风光") || text.contains("城市")) return "风光";
         return "通用摄影场景";
     }
 
     private String inferTargetStyle(KnowledgeSource source) {
-        if (source.title().contains("电影")) {
-            return "电影感";
-        }
-        if (source.title().contains("日系")) {
-            return "日系清透";
-        }
+        if (source.title().contains("电影")) return "电影感";
+        if (source.title().contains("日系")) return "日系清透";
         return source.title();
     }
 
@@ -290,6 +306,12 @@ public class KnowledgeMaterialIngestionService {
         return Map.of();
     }
 
+    private String buildUploadedVideoNotes(String notes, StoredFile storedFile) {
+        String prefix = "上传文件：" + storedFile.fileName() + "\n存储地址：" + storedFile.fileUrl();
+        String cleaned = trimOrDefault(notes, "");
+        return cleaned.isBlank() ? prefix : prefix + "\n备注：" + cleaned;
+    }
+
     private String buildKnowledgeContent(KnowledgeSource source, KnowledgeMaterial material) {
         return """
                 来源类型：%s
@@ -303,14 +325,8 @@ public class KnowledgeMaterialIngestionService {
                 素材内容：
                 %s
                 """.formatted(
-                source.sourceType(),
-                source.title(),
-                source.author(),
-                source.originalUrl(),
-                material.materialType(),
-                material.title(),
-                material.language(),
-                material.content()
+                source.sourceType(), source.title(), source.author(), source.originalUrl(),
+                material.materialType(), material.title(), material.language(), material.content()
         ).trim();
     }
 
@@ -321,24 +337,14 @@ public class KnowledgeMaterialIngestionService {
                 作者：%s
                 原始链接：%s
                 备注：%s
-                """.formatted(
-                source.sourceType(),
-                source.title(),
-                source.author(),
-                source.originalUrl(),
-                source.notes()
-        ).trim();
+                """.formatted(source.sourceType(), source.title(), source.author(), source.originalUrl(), source.notes()).trim();
     }
 
     private String extractOriginalUrl(String value) {
         String cleaned = trimOrDefault(value, "");
         int start = cleaned.indexOf("http://");
-        if (start < 0) {
-            start = cleaned.indexOf("https://");
-        }
-        if (start < 0) {
-            return cleaned;
-        }
+        if (start < 0) start = cleaned.indexOf("https://");
+        if (start < 0) return cleaned;
         int end = cleaned.indexOf(' ', start);
         String url = end < 0 ? cleaned.substring(start) : cleaned.substring(start, end);
         return url.replaceAll("[，,。！？!]+$", "");

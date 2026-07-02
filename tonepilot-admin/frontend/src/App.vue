@@ -204,6 +204,34 @@
 
           <el-divider />
 
+          <el-form label-position="top" class="inline-import">
+            <el-form-item label="上传抖音视频文件">
+              <el-upload
+                :auto-upload="false"
+                :limit="1"
+                accept=".mp4,.mov,.m4v,.webm"
+                :on-change="handleDouyinVideoFileChange"
+                :on-remove="removeDouyinVideoFile"
+              >
+                <el-button :icon="Upload">选择视频</el-button>
+              </el-upload>
+            </el-form-item>
+            <el-form-item label="视频标题">
+              <el-input v-model="douyinUploadForm.title" placeholder="例如：watchluke 蓝调忧郁感" />
+            </el-form-item>
+            <el-form-item label="作者">
+              <el-input v-model="douyinUploadForm.author" placeholder="可选" />
+            </el-form-item>
+            <el-form-item label="备注">
+              <el-input v-model="douyinUploadForm.notes" type="textarea" :rows="3" placeholder="可选：账号、期数、你希望保留的调色要点" />
+            </el-form-item>
+            <el-button :icon="Upload" type="primary" :loading="uploadingDouyinVideo" @click="uploadDouyinVideo">
+              上传视频并生成知识
+            </el-button>
+          </el-form>
+
+          <el-divider />
+
           <el-table :data="knowledgeSources" height="180" highlight-current-row @row-click="selectKnowledgeSource">
             <el-table-column prop="title" label="来源" min-width="180" />
             <el-table-column prop="sourceType" label="类型" width="150" />
@@ -483,6 +511,8 @@ const knowledgeStatus = ref('')
 const selectedSourceId = ref<number | undefined>()
 const extractingMaterialId = ref<number | undefined>()
 const importingDouyin = ref(false)
+const uploadingDouyinVideo = ref(false)
+const douyinVideoFile = ref<File | undefined>()
 const sampleFile = ref<File | undefined>()
 const benchmarkSummary = ref('')
 const runtimeFilters = reactive({
@@ -582,6 +612,13 @@ const douyinForm = reactive({
   styleId: undefined as number | undefined
 })
 
+const douyinUploadForm = reactive({
+  title: '上传抖音调色教程',
+  author: '',
+  notes: '',
+  styleId: undefined as number | undefined
+})
+
 const sampleForm = reactive({
   styleId: undefined as number | undefined,
   description: '夜景样片，灯牌高光明显，暗部有可恢复细节。',
@@ -620,6 +657,7 @@ function selectStyle(row: any) {
   sampleForm.styleId = row.id
   sourceForm.styleId = row.id
   douyinForm.styleId = row.id
+  douyinUploadForm.styleId = row.id
 }
 
 async function createStyle() {
@@ -756,6 +794,38 @@ async function importDouyinVideo() {
     await Promise.all([loadKnowledgeSources(), loadAdminKnowledge()])
   } finally {
     importingDouyin.value = false
+  }
+}
+
+function handleDouyinVideoFileChange(file: UploadFile) {
+  douyinVideoFile.value = file.raw
+}
+
+function removeDouyinVideoFile() {
+  douyinVideoFile.value = undefined
+}
+
+async function uploadDouyinVideo() {
+  if (!douyinVideoFile.value) {
+    ElMessage.warning('请先选择一个视频文件')
+    return
+  }
+  uploadingDouyinVideo.value = true
+  try {
+    const formData = new FormData()
+    formData.append('file', douyinVideoFile.value)
+    formData.append('title', douyinUploadForm.title)
+    formData.append('author', douyinUploadForm.author)
+    formData.append('notes', douyinUploadForm.notes)
+    const styleId = douyinUploadForm.styleId || sourceForm.styleId
+    if (styleId) formData.append('styleId', String(styleId))
+    const job = await unwrap<any>(api.post('/api/admin/knowledge-sources/douyin-video-uploads', formData))
+    ElMessage.success(`已生成待审核知识 #${job.generatedKnowledgeId}`)
+    douyinVideoFile.value = undefined
+    douyinUploadForm.notes = ''
+    await Promise.all([loadKnowledgeSources(), loadAdminKnowledge()])
+  } finally {
+    uploadingDouyinVideo.value = false
   }
 }
 

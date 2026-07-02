@@ -64,6 +64,11 @@ tonepilot:
       command: ${TONEPILOT_DOUYIN_COMMAND:}
       command-shell: ${TONEPILOT_DOUYIN_COMMAND_SHELL:false}
       timeout-seconds: ${TONEPILOT_DOUYIN_TIMEOUT_SECONDS:900}
+    video:
+      # 上传视频文件导入知识库时使用；默认适配器路径是 ../../scripts/uploaded-video-transcript-adapter.py
+      command: ${TONEPILOT_VIDEO_COMMAND:}
+      command-shell: ${TONEPILOT_VIDEO_COMMAND_SHELL:false}
+      timeout-seconds: ${TONEPILOT_VIDEO_TIMEOUT_SECONDS:900}
   ai:
     # rule / openai / qwen2
     provider: rule

@@ -66,6 +66,11 @@ tonepilot:
       rerank:
         provider: ${TONEPILOT_RERANK_PROVIDER:none}
         model: ${TONEPILOT_RERANK_MODEL:}
+  ingestion:
+    douyin:
+      command: ${TONEPILOT_DOUYIN_COMMAND:}
+      command-shell: ${TONEPILOT_DOUYIN_COMMAND_SHELL:false}
+      timeout-seconds: ${TONEPILOT_DOUYIN_TIMEOUT_SECONDS:900}
   ai:
     provider: ${TONEPILOT_AI_PROVIDER:rule}
     fallback-enabled: ${TONEPILOT_AI_FALLBACK_ENABLED:true}

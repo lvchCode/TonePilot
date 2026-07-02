@@ -138,15 +138,15 @@ public class KnowledgeMaterialIngestionService {
     }
 
     public KnowledgeExtractionJob importDouyinVideo(DouyinImportRequest request) {
+        String transcript = douyinTranscriptService.extractTranscript(request);
         KnowledgeSource source = createSource(new KnowledgeSourceRequest(
                 "douyin_video",
                 trimOrDefault(request.title(), "抖音调色教程"),
                 trimOrDefault(request.author(), "未知作者"),
-                trimOrDefault(request.videoUrl(), ""),
+                extractOriginalUrl(request.videoUrl()),
                 request.styleId(),
                 trimOrDefault(request.notes(), "")
         ));
-        String transcript = douyinTranscriptService.extractTranscript(request);
         KnowledgeMaterial material = importMaterial(source.id(), new KnowledgeMaterialRequest(
                 "transcript",
                 source.title() + " 字幕/摘要",
@@ -328,6 +328,20 @@ public class KnowledgeMaterialIngestionService {
                 source.originalUrl(),
                 source.notes()
         ).trim();
+    }
+
+    private String extractOriginalUrl(String value) {
+        String cleaned = trimOrDefault(value, "");
+        int start = cleaned.indexOf("http://");
+        if (start < 0) {
+            start = cleaned.indexOf("https://");
+        }
+        if (start < 0) {
+            return cleaned;
+        }
+        int end = cleaned.indexOf(' ', start);
+        String url = end < 0 ? cleaned.substring(start) : cleaned.substring(start, end);
+        return url.replaceAll("[，,。！？!]+$", "");
     }
 
     private String trimOrDefault(String value, String fallback) {

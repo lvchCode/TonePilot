@@ -58,6 +58,12 @@ tonepilot:
       rerank:
         provider: none
         model:
+  ingestion:
+    douyin:
+      # 后端通常从 tonepilot-admin/backend 启动，所以仓库内置适配器路径是 ../../scripts/douyin-transcript-adapter.py
+      command: ${TONEPILOT_DOUYIN_COMMAND:}
+      command-shell: ${TONEPILOT_DOUYIN_COMMAND_SHELL:false}
+      timeout-seconds: ${TONEPILOT_DOUYIN_TIMEOUT_SECONDS:900}
   ai:
     # rule / openai / qwen2
     provider: rule

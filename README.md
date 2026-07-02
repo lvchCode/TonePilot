@@ -201,6 +201,39 @@ export QWEN2_VISION_MODEL=你的_Qwen2_视觉模型
 
 插件端请求也可以传入 `provider`，临时选择 `openai` 或 `qwen2`。
 
+## 抖音调色教程导入知识库
+
+管理端支持把抖音调色教程导入为待审核知识。当前实现采用“外部命令适配器”模式：管理端后端负责创建来源、写入素材、调用大模型抽取知识；视频解析、下载和字幕转写由可配置命令完成。
+
+推荐接入 `video-to-subtitle-summary-skill`：
+
+```bash
+git clone https://github.com/imlewc/video-to-subtitle-summary-skill.git ~/.codex/skills/video-to-subtitle-summary
+python3 ~/.codex/skills/video-to-subtitle-summary/scripts/install_faster_whisper.py
+```
+
+然后配置 AI Douyin 或 TikHub。当前仓库内置的 `scripts/douyin-transcript-adapter.py` 已适配 AI Douyin：
+
+```bash
+export VIDEO_TO_SUBTITLE_SUMMARY_SKILL_DIR=$HOME/.codex/skills/video-to-subtitle-summary
+export VIDEO_INFO_PROVIDER=ai-douyin
+export AI_DOUYIN_API_BASE=https://ai-douyin.top9.cc
+export AI_DOUYIN_API_KEY=你的_AI_Douyin_Key
+export TONEPILOT_DOUYIN_COMMAND="python3 ../../scripts/douyin-transcript-adapter.py"
+export TONEPILOT_DOUYIN_COMMAND_SHELL=false
+export TONEPILOT_DOUYIN_TIMEOUT_SECONDS=900
+```
+
+未配置 `TONEPILOT_DOUYIN_COMMAND` 时，系统不会假装已经抓到字幕；只有在“备注/已知调色步骤”中粘贴了字幕或调色步骤时，才会作为手工素材导入。
+
+导入入口：
+
+```text
+管理端 -> 素材导入 -> 抖音视频链接 -> 导入抖音并生成知识
+```
+
+可以直接粘贴抖音分享文案，后端会自动提取其中的 `https://v.douyin.com/...` 链接。
+
 ## 项目结构
 
 ```text

@@ -186,7 +186,7 @@
 
           <el-form label-position="top" class="inline-import">
             <el-form-item label="抖音视频链接">
-              <el-input v-model="douyinForm.videoUrl" placeholder="粘贴抖音作品链接，生成待审核调色知识" />
+              <el-input v-model="douyinForm.videoUrl" placeholder="粘贴抖音作品链接或完整分享文案，系统会提取字幕并生成待审核知识" />
             </el-form-item>
             <el-form-item label="标题">
               <el-input v-model="douyinForm.title" placeholder="例如：城市夜景电影感教程" />
@@ -195,7 +195,7 @@
               <el-input v-model="douyinForm.author" placeholder="可选" />
             </el-form-item>
             <el-form-item label="备注/已知调色步骤">
-              <el-input v-model="douyinForm.notes" type="textarea" :rows="3" placeholder="可粘贴视频摘要、字幕或你观察到的调色步骤" />
+              <el-input v-model="douyinForm.notes" type="textarea" :rows="3" placeholder="可选：未配置外部转写命令时，请在这里粘贴视频字幕或调色步骤" />
             </el-form-item>
             <el-button :icon="Upload" type="primary" :loading="importingDouyin" @click="importDouyinVideo">
               导入抖音并生成知识

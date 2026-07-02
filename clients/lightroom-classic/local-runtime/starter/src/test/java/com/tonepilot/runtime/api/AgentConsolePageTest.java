@@ -170,6 +170,20 @@ class AgentConsolePageTest {
     }
 
     @Test
+    void rendersExplicitConfirmationBeforeApplyingToLightroom() throws Exception {
+        String html;
+        try (var input = getClass().getResourceAsStream("/static/agent-console.html")) {
+            assertThat(input).isNotNull();
+            html = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+        }
+
+        assertThat(html).contains("pending_confirmation");
+        assertThat(html).contains("confirmApplyToLightroom");
+        assertThat(html).contains("/api/lightroom-agent/apply-confirmed");
+        assertThat(html).contains("data-confirm-apply");
+        assertThat(html).contains("确认应用到 Lightroom");
+    }
+    @Test
     void pluginPublishesImmutableBaselinePreviewForBeforeComparison() throws Exception {
         Path pluginPath = findProjectRoot().resolve("clients/lightroom-classic/plugin/TonePilotLightroomBridge.lrplugin/BridgeWorker.lua");
         String lua = Files.readString(pluginPath);

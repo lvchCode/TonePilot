@@ -29,6 +29,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
 @Service
@@ -51,6 +52,8 @@ public class RuntimeAgentOrchestrator {
 
     @Autowired
     private RuntimeTraceLogger traceLogger;
+
+    private final Map<String, PendingApplyPlan> pendingApplyPlans = new ConcurrentHashMap<>();
 
     @SuppressWarnings("unchecked")
     public Map<String, Object> chat(Map<String, Object> payload) {
@@ -153,27 +156,29 @@ public class RuntimeAgentOrchestrator {
         data.put("knowledgeMatches", knowledgeMatches);
 
         if (shouldApply(message, tuneResult)) {
-            boolean hasLocalAdjustments = tuneResult.localAdjustments() != null && !tuneResult.localAdjustments().isEmpty();
-            emit(reactEvents, eventSink, sessionId, "tool.call", "调用 Lightroom 工具", hasLocalAdjustments
-                    ? "主 Agent 决定把局部蒙版计划下发给 Lightroom 插件，插件会打开相应局部工具并设置参数。"
-                    : "主 Agent 决定执行全局 Develop Settings 调色。", Map.of(
-                    "developSettings", tuneResult.developSettings(),
-                    "localAdjustments", tuneResult.localAdjustments()
+            PendingApplyPlan pendingPlan = new PendingApplyPlan(
+                    sessionId,
+                    data,
+                    tuneResult.developSettings() == null ? Map.of() : new LinkedHashMap<>(tuneResult.developSettings()),
+                    tuneResult.localAdjustments() == null ? List.of() : new ArrayList<>(tuneResult.localAdjustments())
+            );
+            pendingApplyPlans.put(sessionId, pendingPlan);
+            data.put("action", "pending_confirmation");
+            data.put("pendingApply", Map.of(
+                    "status", "waiting_user_confirmation",
+                    "sessionId", sessionId,
+                    "settingCount", pendingPlan.developSettings().size(),
+                    "localAdjustmentCount", pendingPlan.localAdjustments().size()
             ));
-            Map<String, Object> applyResult = toolService.applyAdjustments(tuneResult.developSettings(), tuneResult.localAdjustments());
-            emit(reactEvents, eventSink, sessionId, "tool.result", "Lightroom 任务已提交", String.valueOf(applyResult.getOrDefault("message", "已提交 Lightroom 调色任务。")), Map.of("apply", applyResult));
-            data.put("action", "tool_submitted");
-            data.put("apply", applyResult);
-            data.put("afterPreviewUrl", "");
             data.put("assistantMessage", mergeMessage(
                     tuneResult.assistantMessage(),
-                    "我已经根据这个判断调用 Lightroom 执行调色，完成后会刷新修图后预览。"
+                    "我已经整理好这次要写入 Lightroom 的调色方案。请先检查上面的参数和局部蒙版计划，确认后再点“确认应用到 Lightroom”。"
             ));
-            emit(reactEvents, eventSink, sessionId, "agent.final", "本轮完成", String.valueOf(data.get("assistantMessage")), Map.of("data", data));
+            emit(reactEvents, eventSink, sessionId, "agent.final", "等待用户确认", String.valueOf(data.get("assistantMessage")), Map.of("data", data));
             data.put("reactEvents", reactEvents.stream().map(AgentReactEvent::toMap).toList());
-            adminRuntimeClient.recordEvent("agent.tool.submitted", sessionId, data);
-            traceLogger.info("agent.tool.submitted", sessionId, Map.of("apply", applyResult));
-            return Map.of("success", applyResult.getOrDefault("success", true), "message", data.get("assistantMessage"), "data", data);
+            adminRuntimeClient.recordEvent("agent.apply.waiting_confirmation", sessionId, data);
+            traceLogger.info("agent.apply.waiting_confirmation", sessionId, Map.of("pendingApply", data.get("pendingApply")));
+            return Map.of("success", true, "message", data.get("assistantMessage"), "data", data);
         }
 
         data.put("action", "respond");
@@ -184,6 +189,32 @@ public class RuntimeAgentOrchestrator {
         traceLogger.info("agent.response.ready", sessionId, Map.of("action", "respond"));
         return Map.of("success", true, "message", data.get("assistantMessage"), "data", data);
     }
+
+    public Map<String, Object> confirmApply(Map<String, Object> payload) {
+        String sessionId = sessionId(payload);
+        PendingApplyPlan pendingPlan = pendingApplyPlans.get(sessionId);
+        if (pendingPlan == null) {
+            traceLogger.warn("agent.apply.confirm_missing", sessionId, Map.of("reason", "no_pending_plan"));
+            return Map.of("success", false, "message", "没有找到待确认的调色方案，请先让 Agent 生成一版方案。", "data", Map.of("action", "confirm_missing", "sessionId", sessionId));
+        }
+        Map<String, Object> status = stateService.status();
+        if (!Boolean.TRUE.equals(status.get("available"))) {
+            traceLogger.warn("agent.apply.confirm_lightroom_unavailable", sessionId, status);
+            return Map.of("success", false, "message", "Lightroom 插件不可用：" + status.getOrDefault("message", "请确认 Lightroom 插件正在运行并写入心跳。"), "data", Map.of("action", "confirm_failed", "sessionId", sessionId));
+        }
+
+        Map<String, Object> applyResult = toolService.applyAdjustments(pendingPlan.developSettings(), pendingPlan.localAdjustments());
+        Map<String, Object> data = new LinkedHashMap<>(pendingPlan.data());
+        data.put("action", "tool_submitted");
+        data.put("apply", applyResult);
+        data.put("afterPreviewUrl", "");
+        data.put("assistantMessage", "已确认应用到 Lightroom，正在等待插件完成调色并刷新修图后预览。");
+        pendingApplyPlans.remove(sessionId);
+        adminRuntimeClient.recordEvent("agent.tool.submitted", sessionId, data);
+        traceLogger.info("agent.tool.submitted", sessionId, Map.of("apply", applyResult));
+        return Map.of("success", applyResult.getOrDefault("success", true), "message", data.get("assistantMessage"), "data", data);
+    }
+
 
     public Map<String, Object> applyStatus(String jobId) {
         return toolService.applyStatus(jobId);
@@ -317,6 +348,15 @@ public class RuntimeAgentOrchestrator {
         }
         return first + "\n\n" + second;
     }
+
+    private record PendingApplyPlan(
+            String sessionId,
+            Map<String, Object> data,
+            Map<String, Object> developSettings,
+            List<Map<String, Object>> localAdjustments
+    ) {
+    }
+
 
     private String sessionId(Map<String, Object> payload) {
         Object value = payload.get("sessionId");

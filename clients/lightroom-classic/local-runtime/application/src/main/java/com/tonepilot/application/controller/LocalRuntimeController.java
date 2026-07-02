@@ -138,6 +138,16 @@ public class LocalRuntimeController {
         }
     }
 
+    @PostMapping("/api/lightroom-agent/apply-confirmed")
+    public Map<String, Object> applyConfirmed(@RequestBody Map<String, Object> payload) {
+        String sessionId = String.valueOf(payload.getOrDefault("sessionId", ""));
+        try (TraceContextManager.TraceScope ignored = traceContextManager.open(sessionId)) {
+            traceLogger.info("api.agent_apply_confirmed.request", sessionId, Map.of("sessionId", sessionId));
+            return orchestrator.confirmApply(payload);
+        }
+    }
+
+
     @GetMapping("/api/lightroom-agent/apply-status/{jobId}")
     public Map<String, Object> applyStatus(@PathVariable String jobId) {
         traceLogger.info("api.agent_apply_status.request", jobId, Map.of("jobId", jobId));

@@ -89,7 +89,7 @@ class RuntimeAgentOrchestratorTest {
     }
 
     @Test
-    void explicitEditingRequestAppliesLightroomSettingsAutonomously() {
+    void explicitEditingRequestReturnsPendingConfirmationWithoutApplyingLightroomSettings() {
         TestContext context = new TestContext();
         context.lightroomAvailable();
         context.qwenSelected();
@@ -115,9 +115,9 @@ class RuntimeAgentOrchestratorTest {
 
         assertThat(result).containsEntry("success", true);
         Map<String, Object> data = (Map<String, Object>) result.get("data");
-        assertThat(data).containsEntry("action", "tool_submitted");
-        assertThat((Map<String, Object>) data.get("apply")).containsEntry("jobId", "agent-apply-1");
-        verify(context.toolService).applyAdjustments(Map.of("Exposure2012", 0.2), List.of());
+        assertThat(data).containsEntry("action", "pending_confirmation");
+        assertThat((Map<String, Object>) data.get("pendingApply")).containsEntry("status", "waiting_user_confirmation");
+        verify(context.toolService, never()).applyAdjustments(anyMap(), any());
     }
 
     @Test
@@ -145,6 +145,37 @@ class RuntimeAgentOrchestratorTest {
 
         Map<String, Object> data = (Map<String, Object>) result.get("data");
         assertThat(data).containsEntry("beforePreviewUrl", "/files/selected-before-DSCF1709-1782890000.jpg?t=1782890000");
+    }
+    @Test
+    void confirmApplySubmitsLastPendingPlanToLightroom() {
+        TestContext context = new TestContext();
+        context.lightroomAvailableWithBaselinePreview();
+        context.qwenSelected();
+        when(context.modelAgent.plan(any(), eq("qwen2"), anyMap(), anyString())).thenReturn(new AgentTuneResult(
+                "apply",
+                Map.of("Exposure2012", 0.2),
+                List.of(new AgentDelta("basic", "Exposure2012", "Exposure", 0, 0.2, 0.2, "test")),
+                Map.of("intent", "edit", "photoType", "night", "recommendedStyle", "film")
+        ));
+        when(context.toolService.applyAdjustments(anyMap(), any())).thenReturn(Map.of(
+                "success", true,
+                "pending", true,
+                "jobId", "agent-apply-confirmed"
+        ));
+
+        context.orchestrator.chat(Map.of(
+                "message", "edit this photo",
+                "provider", "qwen2",
+                "sessionId", "session-confirm"
+        ));
+        Map<String, Object> result = context.orchestrator.confirmApply(Map.of("sessionId", "session-confirm"));
+
+        assertThat(result).containsEntry("success", true);
+        Map<String, Object> data = (Map<String, Object>) result.get("data");
+        assertThat(data).containsEntry("action", "tool_submitted");
+        assertThat(data).containsEntry("beforePreviewUrl", "/files/selected-before-DSCF1709-1782890000.jpg?t=1782890000");
+        assertThat((Map<String, Object>) data.get("apply")).containsEntry("jobId", "agent-apply-confirmed");
+        verify(context.toolService).applyAdjustments(Map.of("Exposure2012", 0.2), List.of());
     }
     @Test
     void localAdjustmentPlansAreSubmittedToLightroomAsGuidedMaskTasks() {
@@ -188,10 +219,10 @@ class RuntimeAgentOrchestratorTest {
         ));
 
         Map<String, Object> data = (Map<String, Object>) result.get("data");
-        assertThat(data).containsEntry("action", "tool_submitted");
+        assertThat(data).containsEntry("action", "pending_confirmation");
         assertThat((List<Map<String, Object>>) data.get("localAdjustments")).containsExactly(skyPlan);
         assertThat((Map<String, Object>) data.get("capabilities")).containsEntry("supportsLocalMaskGuides", true);
-        verify(context.toolService).applyAdjustments(Map.of(), List.of(skyPlan));
+        verify(context.toolService, never()).applyAdjustments(anyMap(), any());
     }
 
     @Test

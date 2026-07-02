@@ -1257,6 +1257,7 @@
       } else if (data.beforePreviewUrl || data.afterPreviewUrl) {
         setComparison(data.beforePreviewUrl || lastBeforeUrl, data.afterPreviewUrl || '', data.photo?.fileName || currentPhoto?.photo?.fileName || '', data.session?.photoKey || '', data.version?.versionId || '')
       }
+      const pendingConfirmation = data.action === 'pending_confirmation' ? '<div class="agent-block confirm-apply-block"><strong>应用确认</strong><p>Agent 已生成调色方案，但还没有写入 Lightroom。请确认参数和局部计划无误后再应用。</p><button type="button" data-confirm-apply="true">确认应用到 Lightroom</button></div>' : ''
       const suggestedReplies = ((thought.userOptions || data.suggestedReplies || [])).map(reply => '<button type="button" data-reply="' + escapeHtml(reply) + '">' + escapeHtml(reply) + '</button>').join('')
       finalizeAgentMessage(thinking, [
         '<div>' + escapeHtml(localizeParamText(data.assistantMessage || '')) + '</div>', renderAgentThought(thought, analysis),
@@ -1264,14 +1265,39 @@
         deltas ? '<div class="agent-block"><strong>本轮调整</strong><div class="deltas">' + deltas + '</div></div>' : '',
         localPlans ? '<div class="agent-block"><strong>局部蒙版计划</strong><div class="deltas">' + localPlans + '</div></div>' : '',
         data.action === 'tool_submitted' ? '<div class="agent-block">正在应用到 Lightroom；如果包含局部蒙版，插件会打开 Masking 面板，必要时会提示你确认区域位置。</div>' : '',
+        pendingConfirmation,
         suggestedReplies ? '<div class="agent-actions">' + suggestedReplies + '</div>' : ''
       ].join(''))
       chat.querySelectorAll('button[data-reply]').forEach(button => {
         button.addEventListener('click', () => { prompt.value = button.dataset.reply || ''; sendMessage() })
       })
+      chat.querySelectorAll('button[data-confirm-apply]').forEach(button => {
+        button.addEventListener('click', () => confirmApplyToLightroom(button))
+      })
       if (data.action === 'tool_submitted' && data.apply?.jobId) pollApplyStatus(data.apply.jobId, data.beforePreviewUrl || currentPhoto?.baselinePreviewUrl || lastBeforeUrl)
     }
 
+    async function confirmApplyToLightroom(button) {
+      if (button) button.disabled = true
+      addMessage('user', '确认应用到 Lightroom')
+      const thinking = addThinkingMessage()
+      send.disabled = true
+      try {
+        const response = await fetch('/api/lightroom-agent/apply-confirmed', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId })
+        })
+        const payload = await response.json()
+        if (!response.ok || payload.success === false) throw new Error(payload.message || '确认应用失败')
+        const data = payload.data
+        if (!data) throw new Error('确认应用没有返回任务数据')
+        sessionId = data.sessionId || sessionId
+        renderAgentResult(data, thinking)
+      } catch (error) {
+        finalizeAgentMessage(thinking, 'Agent 没有完成确认应用：' + escapeHtml(error.message))
+      } finally {
+        send.disabled = false
+      }
+    }
     function parseSseChunk(buffer, onEvent) {
       const parts = buffer.split('\n\n')
       const rest = parts.pop() || ''

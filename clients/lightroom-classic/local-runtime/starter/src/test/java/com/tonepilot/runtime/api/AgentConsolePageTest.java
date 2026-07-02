@@ -170,6 +170,16 @@ class AgentConsolePageTest {
     }
 
     @Test
+    void pluginPublishesImmutableBaselinePreviewForBeforeComparison() throws Exception {
+        Path pluginPath = findProjectRoot().resolve("clients/lightroom-classic/plugin/TonePilotLightroomBridge.lrplugin/BridgeWorker.lua");
+        String lua = Files.readString(pluginPath);
+
+        assertThat(lua).contains("baselinePreviewUrl");
+        assertThat(lua).contains("selected-before-");
+        assertThat(lua).contains("immutableBaselinePreviewPath");
+        assertThat(lua).contains("payload.baselinePreviewUrl");
+    }
+    @Test
     void lightroomPluginUsesMaskingToolForLocalAdjustments() throws Exception {
         Path pluginPath = findProjectRoot().resolve("clients/lightroom-classic/plugin/TonePilotLightroomBridge.lrplugin/BridgeWorker.lua");
         String lua = Files.readString(pluginPath);

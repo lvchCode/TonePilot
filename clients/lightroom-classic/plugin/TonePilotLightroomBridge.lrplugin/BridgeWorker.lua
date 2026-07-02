@@ -13,9 +13,12 @@ local BridgeWorker = {
     running = false
 }
 
-local WORKER_BUILD = 24
+local WORKER_BUILD = 25
 local lastPreviewKey = ""
 local lastPreviewAt = 0
+local lastBaselinePhotoKey = ""
+local lastBaselinePreviewUrl = ""
+local lastBaselinePreviewPath = ""
 local lastMetadataDebugKey = ""
 local lastMetadataDebugAt = 0
 local lastMetadataDebug = nil
@@ -412,12 +415,20 @@ function writeSelectedPhotoState()
             return updateSelectedPreview(selected)
         end)
         if previewOk then
-            payload.previewUrl = previewUrlOrError
+            if type(previewUrlOrError) == "table" then
+                payload.previewUrl = previewUrlOrError.previewUrl
+                payload.baselinePreviewUrl = previewUrlOrError.baselinePreviewUrl
+            else
+                payload.previewUrl = previewUrlOrError
+            end
         else
             payload.previewError = tostring(previewUrlOrError)
             writeDiagnostic("preview-error.txt", tostring(previewUrlOrError))
             if lastPreviewAt ~= 0 and LrFileUtils.exists(LrPathUtils.child(path("results"), "selected-preview.jpg")) then
                 payload.previewUrl = "/files/selected-preview.jpg?t=" .. tostring(lastPreviewAt)
+                if lastBaselinePreviewUrl ~= "" then
+                    payload.baselinePreviewUrl = lastBaselinePreviewUrl
+                end
             end
         end
     end
@@ -439,7 +450,8 @@ end
 function updateSelectedPreview(photo)
     local fileName = firstNonEmpty(metadata(photo, "fileName"), metadata(photo, "path"))
     local copyName = metadata(photo, "copyName")
-    local previewKey = fileName .. "::" .. copyName .. "::" .. developPreviewSignature(photo)
+    local photoIdentity = firstNonEmpty(metadata(photo, "path"), fileName) .. "::" .. copyName
+    local previewKey = photoIdentity .. "::" .. developPreviewSignature(photo)
     local previewFileName = "selected-preview.jpg"
     local previewPath = LrPathUtils.child(path("results"), previewFileName)
 
@@ -449,7 +461,19 @@ function updateSelectedPreview(photo)
         lastPreviewAt = os.time()
     end
 
-    return "/files/" .. previewFileName .. "?t=" .. tostring(lastPreviewAt)
+    if photoIdentity ~= lastBaselinePhotoKey or lastBaselinePreviewUrl == "" or lastBaselinePreviewPath == "" or not LrFileUtils.exists(lastBaselinePreviewPath) then
+        local baselinePreviewFileName = "selected-before-" .. safePreviewName(fileName) .. "-" .. tostring(lastPreviewAt) .. ".jpg"
+        local immutableBaselinePreviewPath = LrPathUtils.child(path("results"), baselinePreviewFileName)
+        copyBinaryFile(previewPath, immutableBaselinePreviewPath)
+        lastBaselinePhotoKey = photoIdentity
+        lastBaselinePreviewPath = immutableBaselinePreviewPath
+        lastBaselinePreviewUrl = "/files/" .. baselinePreviewFileName .. "?t=" .. tostring(lastPreviewAt)
+    end
+
+    return {
+        previewUrl = "/files/" .. previewFileName .. "?t=" .. tostring(lastPreviewAt),
+        baselinePreviewUrl = lastBaselinePreviewUrl
+    }
 end
 
 function cachedMetadataDiagnostics(photo, photoSummary)
@@ -701,6 +725,20 @@ function leafNameFromPath(filePath)
         return ""
     end
     return LrPathUtils.leafName(filePath)
+end
+
+function safePreviewName(value)
+    local leaf = leafNameFromPath(tostring(value or "photo"))
+    if leaf == "" then
+        leaf = tostring(value or "photo")
+    end
+    local base = string.gsub(leaf, "%.[^%.]+$", "")
+    base = string.gsub(base, "[^%w%-_]", "-")
+    base = string.gsub(base, "%-%-+", "-")
+    if base == "" then
+        base = "photo"
+    end
+    return string.sub(base, 1, 80)
 end
 
 function currentAdjustmentFromPhoto(photo)
@@ -958,6 +996,13 @@ function writeBinaryFile(filePath, content)
     local file = assert(io.open(filePath, "wb"))
     file:write(content)
     file:close()
+end
+
+function copyBinaryFile(sourcePath, targetPath)
+    local source = assert(io.open(sourcePath, "rb"))
+    local content = source:read("*all")
+    source:close()
+    writeBinaryFile(targetPath, content)
 end
 
 function createDirectory(directory)

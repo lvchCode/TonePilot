@@ -121,6 +121,32 @@ class RuntimeAgentOrchestratorTest {
     }
 
     @Test
+    void editingRequestUsesImmutableBaselinePreviewAsBeforeImage() {
+        TestContext context = new TestContext();
+        context.lightroomAvailableWithBaselinePreview();
+        context.qwenSelected();
+        when(context.modelAgent.plan(any(), eq("qwen2"), anyMap(), anyString())).thenReturn(new AgentTuneResult(
+                "apply",
+                Map.of("Exposure2012", 0.2),
+                List.of(new AgentDelta("basic", "Exposure2012", "Exposure", 0, 0.2, 0.2, "test")),
+                Map.of("intent", "edit", "photoType", "night", "recommendedStyle", "film")
+        ));
+        when(context.toolService.applyAdjustments(anyMap(), any())).thenReturn(Map.of(
+                "success", true,
+                "pending", true,
+                "jobId", "agent-apply-baseline"
+        ));
+
+        Map<String, Object> result = context.orchestrator.chat(Map.of(
+                "message", "edit this photo",
+                "provider", "qwen2",
+                "sessionId", "session-before"
+        ));
+
+        Map<String, Object> data = (Map<String, Object>) result.get("data");
+        assertThat(data).containsEntry("beforePreviewUrl", "/files/selected-before-DSCF1709-1782890000.jpg?t=1782890000");
+    }
+    @Test
     void localAdjustmentPlansAreSubmittedToLightroomAsGuidedMaskTasks() {
         TestContext context = new TestContext();
         context.lightroomAvailable();
@@ -290,6 +316,16 @@ class RuntimeAgentOrchestratorTest {
             ));
         }
 
+        void lightroomAvailableWithBaselinePreview() {
+            when(stateService.status()).thenReturn(Map.of("available", true));
+            when(stateService.selectedPhoto()).thenReturn(Map.of(
+                    "available", true,
+                    "photo", Map.of("fileName", "DSCF1709.RAF"),
+                    "currentAdjustment", Map.of(),
+                    "previewUrl", "/files/selected-preview.jpg?t=1782890001",
+                    "baselinePreviewUrl", "/files/selected-before-DSCF1709-1782890000.jpg?t=1782890000"
+            ));
+        }
         void qwenSelected() {
             when(configService.readInternalConfig()).thenReturn(Map.of(
                     "provider", "qwen2",

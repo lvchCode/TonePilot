@@ -1068,13 +1068,14 @@
       const backendSession = payload.session || {}
       const photoKey = backendSession.photoKey || photo.path || photo.fileName || ''
       const photoName = photo.fileName || '当前照片'
-      const livePreviewUrl = payload.previewUrl || payload.baselinePreviewUrl || ''
-      const clientSession = loadPhotoSession(photoKey, livePreviewUrl)
+      const livePreviewUrl = payload.previewUrl || ''
+      const fixedBaselinePreviewUrl = payload.baselinePreviewUrl || ''
+      const clientSession = loadPhotoSession(photoKey, fixedBaselinePreviewUrl || livePreviewUrl)
       const session = {
         ...backendSession,
         ...clientSession,
         photoKey,
-        baselinePreviewUrl: clientSession.baselinePreviewUrl || backendSession.baselinePreviewUrl || livePreviewUrl,
+        baselinePreviewUrl: clientSession.baselinePreviewUrl || backendSession.baselinePreviewUrl || fixedBaselinePreviewUrl || livePreviewUrl,
         currentVersion: clientSession.currentVersion || backendSession.currentVersion,
         versions: clientSession.versions || backendSession.versions || []
       }
@@ -1252,7 +1253,7 @@
         '<div><strong>修图方向</strong><br />' + escapeHtml(localizeParamText(analysis.recommendedStyle || '-')) + '</div>'
       ].join('')
       if (data.action === 'tool_submitted' && data.apply?.jobId) {
-        lockApplyComparison(data.apply.jobId, data.beforePreviewUrl || lastBeforeUrl, data.photo?.fileName || currentPhoto?.photo?.fileName || '', data.session?.photoKey || comparisonPhotoKey || currentChatPhotoKey, data)
+        lockApplyComparison(data.apply.jobId, data.beforePreviewUrl || currentPhoto?.baselinePreviewUrl || lastBeforeUrl, data.photo?.fileName || currentPhoto?.photo?.fileName || '', data.session?.photoKey || comparisonPhotoKey || currentChatPhotoKey, data)
       } else if (data.beforePreviewUrl || data.afterPreviewUrl) {
         setComparison(data.beforePreviewUrl || lastBeforeUrl, data.afterPreviewUrl || '', data.photo?.fileName || currentPhoto?.photo?.fileName || '', data.session?.photoKey || '', data.version?.versionId || '')
       }
@@ -1268,7 +1269,7 @@
       chat.querySelectorAll('button[data-reply]').forEach(button => {
         button.addEventListener('click', () => { prompt.value = button.dataset.reply || ''; sendMessage() })
       })
-      if (data.action === 'tool_submitted' && data.apply?.jobId) pollApplyStatus(data.apply.jobId, data.beforePreviewUrl || lastBeforeUrl)
+      if (data.action === 'tool_submitted' && data.apply?.jobId) pollApplyStatus(data.apply.jobId, data.beforePreviewUrl || currentPhoto?.baselinePreviewUrl || lastBeforeUrl)
     }
 
     function parseSseChunk(buffer, onEvent) {

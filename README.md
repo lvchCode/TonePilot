@@ -205,31 +205,33 @@ export QWEN2_VISION_MODEL=你的_Qwen2_视觉模型
 
 管理端支持把抖音调色教程导入为待审核知识。当前推荐两种入口：
 
-1. `抖音视频链接`：粘贴分享链接，同时在备注里粘贴字幕、调色步骤或教程摘要。这个入口完全由 Java 服务处理，不再依赖仓库内的 Python 适配器。
-2. `上传抖音视频文件`：上传已经下载好的视频，管理端保存视频对象，由 Java 服务调用 `ffmpeg` 提取音频，再调用外部 `video-to-subtitle-summary-skill` 的 faster-whisper 转写脚本生成字幕，最后写入知识库。
+1. `抖音视频链接`：粘贴分享链接，同时在备注里粘贴字幕、调色步骤或教程摘要。这个入口完全由 Java 服务处理，不依赖第三方解析平台。
+2. `上传抖音视频文件`：上传已经下载好的视频，管理端保存视频对象，由 Java 服务调用 `ffmpeg` 提取音频，再调用本机 `whisper.cpp` 生成字幕，最后写入知识库。
 
-推荐安装外部转写 skill：
+上传视频模式不依赖 AI Douyin、TikHub 等第三方视频解析平台；只需要你已经拿到本地视频文件，并准备好本机转写工具。
+
+推荐本地依赖：
+
+- `ffmpeg`：从视频中提取 16k 单声道 wav 音频。
+- `whisper.cpp`：本地离线语音转文字。可使用 `whisper-cli` 或自己编译出的等价可执行文件。
+- `ggml` 模型文件：例如 `ggml-small.bin`、`ggml-medium.bin`。模型文件不放入仓库，由部署环境自行配置。
+
+上传视频模式配置示例：
 
 ```bash
-git clone https://github.com/imlewc/video-to-subtitle-summary-skill.git ~/.codex/skills/video-to-subtitle-summary
-python3 ~/.codex/skills/video-to-subtitle-summary/scripts/install_faster_whisper.py
-```
-
-上传视频模式配置：
-
-```bash
-export VIDEO_TO_SUBTITLE_SUMMARY_SKILL_DIR=$HOME/.codex/skills/video-to-subtitle-summary
-export TONEPILOT_VIDEO_SKILL_DIR=$VIDEO_TO_SUBTITLE_SUMMARY_SKILL_DIR
+export TONEPILOT_VIDEO_ASR_PROVIDER=whisper-cpp
 export TONEPILOT_VIDEO_FFMPEG_BIN=ffmpeg
-export TONEPILOT_VIDEO_PYTHON_BIN=python3
+export TONEPILOT_VIDEO_WHISPER_CPP_BIN=whisper-cli
+export TONEPILOT_VIDEO_WHISPER_MODEL=./models/ggml-small.bin
+export TONEPILOT_VIDEO_LANGUAGE=zh
 export TONEPILOT_VIDEO_TIMEOUT_SECONDS=900
 ```
 
-上传视频模式依赖：
+调试时也可以临时使用固定字幕覆盖值，不调用本地 ASR：
 
-- `ffmpeg`：从视频中提取音频。
-- `video-to-subtitle-summary-skill` 的 faster-whisper 依赖：完成本地语音转写。
-- MySQL/H2 schema 中的 `knowledge_source`、`knowledge_material`、`knowledge_extraction_job`、`style_knowledge`、`knowledge_chunk` 表：保存来源、素材、抽取任务、知识草稿和检索分块。
+```bash
+export TONEPILOT_VIDEO_TRANSCRIPT_OVERRIDE="这里粘贴已经整理好的字幕或调色步骤"
+```
 
 导入入口：
 

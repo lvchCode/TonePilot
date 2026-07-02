@@ -15,14 +15,20 @@ import java.util.concurrent.TimeUnit;
 @Service
 public class VideoTranscriptService {
 
-    @Value("${tonepilot.ingestion.video.skill-dir:}")
-    private String skillDir;
+    @Value("${tonepilot.ingestion.video.asr-provider:whisper-cpp}")
+    private String asrProvider;
 
     @Value("${tonepilot.ingestion.video.ffmpeg-bin:ffmpeg}")
     private String ffmpegBin;
 
-    @Value("${tonepilot.ingestion.video.python-bin:python3}")
-    private String pythonBin;
+    @Value("${tonepilot.ingestion.video.whisper-cpp-bin:whisper-cli}")
+    private String whisperCppBin;
+
+    @Value("${tonepilot.ingestion.video.whisper-model:}")
+    private String whisperModel;
+
+    @Value("${tonepilot.ingestion.video.language:zh}")
+    private String language;
 
     @Value("${tonepilot.ingestion.video.timeout-seconds:900}")
     private long timeoutSeconds;
@@ -48,16 +54,8 @@ public class VideoTranscriptService {
         try {
             workDir = Files.createTempDirectory("tonepilot-video-");
             Path audioPath = workDir.resolve("audio.wav");
-            runCommand(List.of(
-                    ffmpegBin, "-y", "-i", input.videoPath().toString(),
-                    "-vn", "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1", audioPath.toString()
-            ), "ffmpeg 提取视频音频");
-
-            Path transcriptScript = findTranscriptScript();
-            ProcessResult transcript = runCommand(List.of(
-                    pythonBin, transcriptScript.toString(), audioPath.toString()
-            ), "faster-whisper 转写视频音频");
-            String transcriptText = transcript.output().trim();
+            extractAudio(input.videoPath(), audioPath);
+            String transcriptText = transcribeAudio(audioPath, workDir);
             if (transcriptText.isBlank()) {
                 throw new IllegalStateException("上传视频转写没有返回字幕内容");
             }
@@ -72,29 +70,64 @@ public class VideoTranscriptService {
         }
     }
 
-    private Path findTranscriptScript() {
-        for (Path candidate : skillDirCandidates()) {
-            Path script = candidate.resolve("scripts").resolve("transcribe_faster_whisper.py");
-            if (Files.exists(script)) {
-                return script.toAbsolutePath().normalize();
-            }
-        }
-        throw new IllegalStateException("未找到 video-to-subtitle-summary skill，请配置 tonepilot.ingestion.video.skill-dir 或 VIDEO_TO_SUBTITLE_SUMMARY_SKILL_DIR。");
+    private void extractAudio(Path videoPath, Path audioPath) {
+        runCommand(List.of(
+                ffmpegBin, "-y", "-i", videoPath.toString(),
+                "-vn", "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1", audioPath.toString()
+        ), "ffmpeg 提取视频音频");
     }
 
-    private List<Path> skillDirCandidates() {
-        Path home = Path.of(System.getProperty("user.home", "."));
-        if (skillDir != null && !skillDir.isBlank()) {
-            return List.of(
-                    Path.of(skillDir).toAbsolutePath().normalize(),
-                    home.resolve(".codex/skills/video-to-subtitle-summary").toAbsolutePath().normalize(),
-                    home.resolve(".codex/skills/video-to-subtitle-summary-skill").toAbsolutePath().normalize()
-            );
+    private String transcribeAudio(Path audioPath, Path workDir) {
+        String provider = cleanOrDefault(asrProvider, "whisper-cpp");
+        if (!"whisper-cpp".equalsIgnoreCase(provider)) {
+            throw new IllegalStateException("不支持的视频转写提供者：" + provider + "，当前支持 whisper-cpp。");
         }
-        return List.of(
-                home.resolve(".codex/skills/video-to-subtitle-summary").toAbsolutePath().normalize(),
-                home.resolve(".codex/skills/video-to-subtitle-summary-skill").toAbsolutePath().normalize()
-        );
+        return transcribeWithWhisperCpp(audioPath, workDir);
+    }
+
+    private String transcribeWithWhisperCpp(Path audioPath, Path workDir) {
+        if (whisperModel == null || whisperModel.isBlank()) {
+            throw new IllegalStateException("未配置 whisper.cpp 模型文件，请配置 tonepilot.ingestion.video.whisper-model。");
+        }
+        Path outputPrefix = workDir.resolve("subtitle");
+        ProcessResult result = runCommand(List.of(
+                whisperCppBin,
+                "-m", Path.of(whisperModel).toAbsolutePath().normalize().toString(),
+                "-f", audioPath.toString(),
+                "-l", cleanOrDefault(language, "zh"),
+                "-otxt",
+                "-of", outputPrefix.toString()
+        ), "whisper.cpp 本地转写视频音频");
+
+        Path textPath = Path.of(outputPrefix + ".txt");
+        if (Files.exists(textPath)) {
+            try {
+                return Files.readString(textPath, StandardCharsets.UTF_8).trim();
+            } catch (Exception exception) {
+                throw new IllegalStateException("读取 whisper.cpp 字幕文本失败：" + exception.getMessage(), exception);
+            }
+        }
+        return normalizeWhisperStdout(result.output());
+    }
+
+    private String normalizeWhisperStdout(String output) {
+        StringBuilder builder = new StringBuilder();
+        for (String line : output.split("\\R")) {
+            String cleaned = line.trim();
+            if (cleaned.isBlank()
+                    || cleaned.startsWith("whisper_")
+                    || cleaned.startsWith("main:")
+                    || cleaned.startsWith("system_info:")
+                    || cleaned.startsWith("[")
+                    || cleaned.startsWith("{")) {
+                continue;
+            }
+            if (!builder.isEmpty()) {
+                builder.append(' ');
+            }
+            builder.append(cleaned);
+        }
+        return builder.toString().trim();
     }
 
     private ProcessResult runCommand(List<String> command, String action) {

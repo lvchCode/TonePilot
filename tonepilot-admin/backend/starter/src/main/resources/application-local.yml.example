@@ -63,10 +63,12 @@ tonepilot:
       # 抖音链接入口只负责把分享链接和手工字幕/摘要写入知识库；自动转写请使用上传视频文件入口。
       manual-notes-required: true
     video:
-      # 上传视频文件导入知识库时使用；Java 服务会调用 ffmpeg 提取音频，再调用外部 skill 的转写脚本。
-      skill-dir: ${TONEPILOT_VIDEO_SKILL_DIR:${VIDEO_TO_SUBTITLE_SUMMARY_SKILL_DIR:}}
+      # 上传视频文件导入知识库时使用；Java 服务会调用 ffmpeg 提取音频，再调用本机 whisper.cpp 转写。
+      asr-provider: ${TONEPILOT_VIDEO_ASR_PROVIDER:whisper-cpp}
       ffmpeg-bin: ${TONEPILOT_VIDEO_FFMPEG_BIN:ffmpeg}
-      python-bin: ${TONEPILOT_VIDEO_PYTHON_BIN:python3}
+      whisper-cpp-bin: ${TONEPILOT_VIDEO_WHISPER_CPP_BIN:whisper-cli}
+      whisper-model: ${TONEPILOT_VIDEO_WHISPER_MODEL:}
+      language: ${TONEPILOT_VIDEO_LANGUAGE:zh}
       timeout-seconds: ${TONEPILOT_VIDEO_TIMEOUT_SECONDS:900}
       transcript-override: ${TONEPILOT_VIDEO_TRANSCRIPT_OVERRIDE:}
   ai:

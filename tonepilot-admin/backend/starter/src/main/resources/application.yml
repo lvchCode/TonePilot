@@ -70,9 +70,11 @@ tonepilot:
     douyin:
       manual-notes-required: true
     video:
-      skill-dir: ${TONEPILOT_VIDEO_SKILL_DIR:${VIDEO_TO_SUBTITLE_SUMMARY_SKILL_DIR:}}
+      asr-provider: ${TONEPILOT_VIDEO_ASR_PROVIDER:whisper-cpp}
       ffmpeg-bin: ${TONEPILOT_VIDEO_FFMPEG_BIN:ffmpeg}
-      python-bin: ${TONEPILOT_VIDEO_PYTHON_BIN:python3}
+      whisper-cpp-bin: ${TONEPILOT_VIDEO_WHISPER_CPP_BIN:whisper-cli}
+      whisper-model: ${TONEPILOT_VIDEO_WHISPER_MODEL:}
+      language: ${TONEPILOT_VIDEO_LANGUAGE:zh}
       timeout-seconds: ${TONEPILOT_VIDEO_TIMEOUT_SECONDS:900}
       transcript-override: ${TONEPILOT_VIDEO_TRANSCRIPT_OVERRIDE:}
   ai:

@@ -13,3 +13,4 @@ tonepilot-admin/backend/storage/
 uploads/
 .env
 .env.local
+tonepilot-admin/backend/starter/data/

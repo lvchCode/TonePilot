@@ -1140,13 +1140,15 @@ async function importDouyinVideo() {
       author: douyinForm.author,
       styleId: douyinForm.styleId || sourceForm.styleId,
       notes: douyinForm.notes
-    }))
+    }, { timeout: 0 }))
     lastIngestionJob.value = job
     selectedSourceId.value = job.sourceId
     ElMessage.success(`已生成待审核知识 #${job.generatedKnowledgeId}`)
     douyinForm.videoUrl = ''
     douyinForm.notes = ''
     await Promise.all([loadKnowledgeSources(), loadAdminKnowledge()])
+  } catch (error) {
+    showRequestError(error, '抖音链接导入失败')
   } finally {
     importingDouyin.value = false
   }
@@ -1158,6 +1160,12 @@ function handleDouyinVideoFileChange(file: UploadFile) {
 
 function removeDouyinVideoFile() {
   douyinVideoFile.value = undefined
+}
+
+function showRequestError(error: unknown, fallback: string) {
+  const responseMessage = (error as any)?.response?.data?.message
+  const message = responseMessage || (error instanceof Error ? error.message : fallback)
+  ElMessage.error(message || fallback)
 }
 
 async function uploadDouyinVideo() {
@@ -1174,13 +1182,15 @@ async function uploadDouyinVideo() {
     formData.append('notes', douyinUploadForm.notes)
     const styleId = douyinUploadForm.styleId || sourceForm.styleId
     if (styleId) formData.append('styleId', String(styleId))
-    const job = await unwrap<any>(api.post('/api/admin/knowledge-sources/douyin-video-uploads', formData))
+    const job = await unwrap<any>(api.post('/api/admin/knowledge-sources/douyin-video-uploads', formData, { timeout: 0 }))
     lastIngestionJob.value = job
     selectedSourceId.value = job.sourceId
     ElMessage.success(`已生成待审核知识 #${job.generatedKnowledgeId}`)
     douyinVideoFile.value = undefined
     douyinUploadForm.notes = ''
     await Promise.all([loadKnowledgeSources(), loadAdminKnowledge()])
+  } catch (error) {
+    showRequestError(error, '抖音视频上传导入失败')
   } finally {
     uploadingDouyinVideo.value = false
   }

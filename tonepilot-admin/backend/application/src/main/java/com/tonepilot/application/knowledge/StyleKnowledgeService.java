@@ -9,7 +9,7 @@ import com.tonepilot.domain.knowledge.StyleKnowledge;
 import com.tonepilot.domain.style.ColorStyle;
 import com.tonepilot.domain.style.StyleSample;
 import com.tonepilot.infrastructure.ai.AiProviderContext;
-import com.tonepilot.infrastructure.knowledge.catalog.KnowledgeCatalogJdbcRepository;
+import com.tonepilot.infrastructure.knowledge.catalog.MybatisKnowledgeCatalogRepository;
 import com.tonepilot.infrastructure.shared.persistence.DomainSnapshotRepository;
 import com.tonepilot.infrastructure.shared.persistence.InMemoryTonePilotStore;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,7 +30,7 @@ public class StyleKnowledgeService {
     private final KnowledgeGenerationAgent knowledgeGenerationAgent;
     private final KnowledgeVectorIndexService knowledgeVectorIndexService;
     private final DomainSnapshotRepository snapshotRepository;
-    private final KnowledgeCatalogJdbcRepository catalogRepository;
+    private final MybatisKnowledgeCatalogRepository catalogRepository;
 
     @Autowired
     public StyleKnowledgeService(
@@ -40,7 +40,7 @@ public class StyleKnowledgeService {
             KnowledgeGenerationAgent knowledgeGenerationAgent,
             KnowledgeVectorIndexService knowledgeVectorIndexService,
             DomainSnapshotRepository snapshotRepository,
-            KnowledgeCatalogJdbcRepository catalogRepository
+            MybatisKnowledgeCatalogRepository catalogRepository
     ) {
         this.store = store;
         this.styleService = styleService;

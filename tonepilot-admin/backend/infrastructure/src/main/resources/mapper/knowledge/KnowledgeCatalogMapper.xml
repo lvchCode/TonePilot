@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tonepilot.infrastructure.knowledge.catalog.mapper.KnowledgeCatalogMapper">
+
+    <update id="updateSource" parameterType="com.tonepilot.domain.knowledge.KnowledgeSource">
+        UPDATE knowledge_source
+        SET source_type = #{sourceType},
+            title = #{title},
+            author = #{author},
+            original_url = #{originalUrl},
+            style_id = #{styleId},
+            notes = #{notes},
+            status = #{status},
+            updated_at = #{updatedAt}
+        WHERE id = #{id}
+    </update>
+
+    <insert id="insertSource" parameterType="com.tonepilot.domain.knowledge.KnowledgeSource">
+        INSERT INTO knowledge_source (
+            id, source_type, title, author, original_url, style_id, notes, status, created_at, updated_at
+        ) VALUES (
+            #{id}, #{sourceType}, #{title}, #{author}, #{originalUrl}, #{styleId}, #{notes}, #{status}, #{createdAt}, #{updatedAt}
+        )
+    </insert>
+
+    <update id="updateMaterial" parameterType="com.tonepilot.domain.knowledge.KnowledgeMaterial">
+        UPDATE knowledge_material
+        SET source_id = #{sourceId},
+            material_type = #{materialType},
+            title = #{title},
+            content = #{content},
+            language = #{language},
+            created_at = #{createdAt}
+        WHERE id = #{id}
+    </update>
+
+    <insert id="insertMaterial" parameterType="com.tonepilot.domain.knowledge.KnowledgeMaterial">
+        INSERT INTO knowledge_material (
+            id, source_id, material_type, title, content, language, created_at
+        ) VALUES (
+            #{id}, #{sourceId}, #{materialType}, #{title}, #{content}, #{language}, #{createdAt}
+        )
+    </insert>
+
+    <update id="updateExtractionJob" parameterType="com.tonepilot.domain.knowledge.KnowledgeExtractionJob">
+        UPDATE knowledge_extraction_job
+        SET source_id = #{sourceId},
+            material_id = #{materialId},
+            status = #{status},
+            generated_knowledge_id = #{generatedKnowledgeId},
+            message = #{message},
+            updated_at = #{updatedAt}
+        WHERE id = #{id}
+    </update>
+
+    <insert id="insertExtractionJob" parameterType="com.tonepilot.domain.knowledge.KnowledgeExtractionJob">
+        INSERT INTO knowledge_extraction_job (
+            id, source_id, material_id, status, generated_knowledge_id, message, created_at, updated_at
+        ) VALUES (
+            #{id}, #{sourceId}, #{materialId}, #{status}, #{generatedKnowledgeId}, #{message}, #{createdAt}, #{updatedAt}
+        )
+    </insert>
+
+    <update id="updateStyleKnowledge" parameterType="com.tonepilot.repository.knowledge.StyleKnowledgeStorageRecord">
+        UPDATE style_knowledge
+        SET style_id = #{styleId},
+            sample_id = #{sampleId},
+            title = #{title},
+            scene = #{scene},
+            target_style = #{targetStyle},
+            problems_json = #{problemsJson},
+            strategy_json = #{strategyJson},
+            param_ranges_json = #{paramRangesJson},
+            content = #{content},
+            embedding_id = #{embeddingId},
+            status = #{status},
+            updated_at = #{updatedAt}
+        WHERE id = #{id}
+    </update>
+
+    <insert id="insertStyleKnowledge" parameterType="com.tonepilot.repository.knowledge.StyleKnowledgeStorageRecord">
+        INSERT INTO style_knowledge (
+            id, style_id, sample_id, title, scene, target_style, problems_json, strategy_json,
+            param_ranges_json, content, embedding_id, status, created_at, updated_at
+        ) VALUES (
+            #{id}, #{styleId}, #{sampleId}, #{title}, #{scene}, #{targetStyle}, #{problemsJson}, #{strategyJson},
+            #{paramRangesJson}, #{content}, #{embeddingId}, #{status}, #{createdAt}, #{updatedAt}
+        )
+    </insert>
+
+    <delete id="deleteKnowledgeChunks" parameterType="long">
+        DELETE FROM knowledge_chunk
+        WHERE source_type = 'style_knowledge_chunk' AND source_id = #{_parameter}
+    </delete>
+
+    <insert id="saveKnowledgeChunk" parameterType="com.tonepilot.repository.knowledge.KnowledgeChunkStorageRecord">
+        INSERT INTO knowledge_chunk (
+            id, source_type, source_id, title, content, embedding_json, created_at
+        ) VALUES (
+            #{id}, #{sourceType}, #{sourceId}, #{title}, #{content}, #{embeddingJson}, #{createdAt}
+        )
+    </insert>
+</mapper>

@@ -1,48 +1,15 @@
 package com.tonepilot.infrastructure.shared.persistence;
 
-import com.tonepilot.domain.agent.*;
-import com.tonepilot.domain.agent.workflow.*;
-import com.tonepilot.domain.colorgrading.*;
-import com.tonepilot.domain.common.*;
-import com.tonepilot.domain.evaluation.*;
-import com.tonepilot.domain.knowledge.*;
-import com.tonepilot.domain.observability.*;
-import com.tonepilot.domain.photo.*;
-import com.tonepilot.domain.runtime.*;
-import com.tonepilot.domain.storage.*;
-import com.tonepilot.domain.style.*;
-import com.tonepilot.repository.observability.*;
-import com.tonepilot.repository.runtime.*;
-import com.tonepilot.infrastructure.agent.*;
-import com.tonepilot.infrastructure.ai.*;
-import com.tonepilot.infrastructure.ai.dto.*;
-import com.tonepilot.infrastructure.knowledge.douyin.*;
-import com.tonepilot.infrastructure.knowledge.rag.*;
-import com.tonepilot.infrastructure.knowledge.rag.config.*;
-import com.tonepilot.infrastructure.observability.*;
-import com.tonepilot.infrastructure.observability.config.*;
-import com.tonepilot.infrastructure.observability.repository.*;
-import com.tonepilot.infrastructure.runtime.repository.*;
-import com.tonepilot.infrastructure.shared.persistence.*;
-import com.tonepilot.infrastructure.storage.*;
-import com.tonepilot.infrastructure.storage.config.*;
-
-
-
-
-
-
-
-import org.springframework.beans.factory.annotation.Autowired;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.tonepilot.repository.shared.DomainSnapshotKey;
+import com.tonepilot.repository.shared.DomainSnapshotRecord;
+import com.tonepilot.repository.shared.DomainSnapshotStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -54,50 +21,36 @@ public class DomainSnapshotRepository {
 
     private final PersistenceProperties properties;
     private final ObjectMapper objectMapper;
-    private final ObjectProvider<JdbcTemplate> jdbcTemplateProvider;
+    private final ObjectProvider<DomainSnapshotStore> storeProvider;
 
     @Autowired
     public DomainSnapshotRepository(
             PersistenceProperties properties,
             ObjectMapper objectMapper,
-            ObjectProvider<JdbcTemplate> jdbcTemplateProvider
+            ObjectProvider<DomainSnapshotStore> storeProvider
     ) {
         this.properties = properties;
         this.objectMapper = objectMapper;
-        this.jdbcTemplateProvider = jdbcTemplateProvider;
+        this.storeProvider = storeProvider;
     }
 
     public void save(String type, Object id, Object value) {
-        JdbcTemplate jdbcTemplate = jdbcTemplateProvider.getIfAvailable();
-        if (!properties.isEnabled() || jdbcTemplate == null || id == null || value == null) {
+        DomainSnapshotStore store = storeProvider.getIfAvailable();
+        if (!properties.isEnabled() || store == null || id == null || value == null) {
             return;
         }
         try {
             String domainId = String.valueOf(id);
-            String json = objectMapper.writeValueAsString(value);
             Instant now = Instant.now();
-            int updated = jdbcTemplate.update("""
-                            UPDATE domain_snapshot
-                            SET payload_json = ?, updated_at = ?
-                            WHERE domain_type = ? AND domain_id = ?
-                            """,
-                    json,
-                    Timestamp.from(now),
+            DomainSnapshotRecord record = new DomainSnapshotRecord(
                     type,
-                    domainId
+                    domainId,
+                    objectMapper.writeValueAsString(value),
+                    now,
+                    now
             );
-            if (updated == 0) {
-                jdbcTemplate.update("""
-                                INSERT INTO domain_snapshot (
-                                    domain_type, domain_id, payload_json, created_at, updated_at
-                                ) VALUES (?, ?, ?, ?, ?)
-                                """,
-                        type,
-                        domainId,
-                        json,
-                        Timestamp.from(now),
-                        Timestamp.from(now)
-                );
+            if (store.updateSnapshot(record) == 0) {
+                store.insertSnapshot(record);
             }
         } catch (Exception exception) {
             log.debug("领域快照写入失败 type={} id={}：{}", type, id, exception.getMessage());
@@ -105,22 +58,16 @@ public class DomainSnapshotRepository {
     }
 
     public <T> Optional<T> find(String type, Object id, Class<T> targetType) {
-        JdbcTemplate jdbcTemplate = jdbcTemplateProvider.getIfAvailable();
-        if (!properties.isEnabled() || jdbcTemplate == null || id == null) {
+        DomainSnapshotStore store = storeProvider.getIfAvailable();
+        if (!properties.isEnabled() || store == null || id == null) {
             return Optional.empty();
         }
         try {
-            return jdbcTemplate.query(
-                    "SELECT payload_json FROM domain_snapshot WHERE domain_type = ? AND domain_id = ?",
-                    resultSet -> {
-                        if (!resultSet.next()) {
-                        return Optional.<T>empty();
-                    }
-                    return Optional.of(readPayload(resultSet.getString("payload_json"), targetType));
-                },
-                type,
-                String.valueOf(id)
-            );
+            String json = store.findPayload(new DomainSnapshotKey(type, String.valueOf(id)));
+            if (json == null || json.isBlank()) {
+                return Optional.empty();
+            }
+            return Optional.of(readPayload(json, targetType));
         } catch (Exception exception) {
             log.debug("领域快照读取失败 type={} id={}：{}", type, id, exception.getMessage());
             return Optional.empty();
@@ -128,16 +75,14 @@ public class DomainSnapshotRepository {
     }
 
     public <T> List<T> list(String type, Class<T> targetType) {
-        JdbcTemplate jdbcTemplate = jdbcTemplateProvider.getIfAvailable();
-        if (!properties.isEnabled() || jdbcTemplate == null) {
+        DomainSnapshotStore store = storeProvider.getIfAvailable();
+        if (!properties.isEnabled() || store == null) {
             return List.of();
         }
         try {
-            return jdbcTemplate.query(
-                    "SELECT payload_json FROM domain_snapshot WHERE domain_type = ?",
-                    (resultSet, rowNum) -> readPayload(resultSet.getString("payload_json"), targetType),
-                    type
-            );
+            return store.listPayloads(type).stream()
+                    .map(json -> readPayload(json, targetType))
+                    .toList();
         } catch (Exception exception) {
             log.debug("领域快照列表读取失败 type={}：{}", type, exception.getMessage());
             return List.of();
@@ -152,5 +97,3 @@ public class DomainSnapshotRepository {
         }
     }
 }
-
-

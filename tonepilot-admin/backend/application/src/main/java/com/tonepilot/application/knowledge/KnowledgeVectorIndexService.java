@@ -2,7 +2,7 @@ package com.tonepilot.application.knowledge;
 
 import com.tonepilot.domain.knowledge.KnowledgeChunk;
 import com.tonepilot.domain.knowledge.StyleKnowledge;
-import com.tonepilot.infrastructure.knowledge.catalog.KnowledgeCatalogJdbcRepository;
+import com.tonepilot.infrastructure.knowledge.catalog.MybatisKnowledgeCatalogRepository;
 import com.tonepilot.infrastructure.shared.persistence.InMemoryTonePilotStore;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -21,7 +21,7 @@ public class KnowledgeVectorIndexService {
     private InMemoryTonePilotStore store;
 
     @Autowired
-    private KnowledgeCatalogJdbcRepository catalogRepository;
+    private MybatisKnowledgeCatalogRepository catalogRepository;
 
     public List<KnowledgeChunk> indexStyleKnowledge(StyleKnowledge knowledge) {
         store.knowledgeChunks.values().removeIf(chunk ->

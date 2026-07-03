@@ -6,6 +6,13 @@ import org.springframework.context.annotation.Configuration;
 
 @Configuration
 @ConditionalOnProperty(name = "tonepilot.persistence.enabled", havingValue = "true", matchIfMissing = true)
-@MapperScan("com.tonepilot.infrastructure.admin.data.mapper")
+@MapperScan({
+        "com.tonepilot.infrastructure.admin.data.mapper",
+        "com.tonepilot.infrastructure.shared.persistence.mapper",
+        "com.tonepilot.infrastructure.agent.workflow.mapper",
+        "com.tonepilot.infrastructure.observability.repository.mapper",
+        "com.tonepilot.infrastructure.runtime.repository.mapper",
+        "com.tonepilot.infrastructure.knowledge.catalog.mapper"
+})
 public class AdminDataMybatisConfiguration {
 }

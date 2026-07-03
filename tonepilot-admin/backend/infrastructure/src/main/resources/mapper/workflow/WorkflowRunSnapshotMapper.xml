@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tonepilot.infrastructure.agent.workflow.mapper.WorkflowRunSnapshotMapper">
+
+    <update id="updateSnapshot" parameterType="com.tonepilot.repository.workflow.WorkflowRunStorageRecord">
+        UPDATE workflow_run_snapshot
+        SET photo_id = #{photoId},
+            status = #{status},
+            provider = #{provider},
+            target_style = #{targetStyle},
+            current_agent = #{currentAgent},
+            storage = #{storage},
+            snapshot_json = #{snapshotJson},
+            created_at = #{createdAt},
+            updated_at = #{updatedAt}
+        WHERE run_id = #{runId}
+    </update>
+
+    <insert id="insertSnapshot" parameterType="com.tonepilot.repository.workflow.WorkflowRunStorageRecord">
+        INSERT INTO workflow_run_snapshot (
+            run_id, photo_id, status, provider, target_style, current_agent,
+            storage, snapshot_json, created_at, updated_at
+        ) VALUES (
+            #{runId}, #{photoId}, #{status}, #{provider}, #{targetStyle}, #{currentAgent},
+            #{storage}, #{snapshotJson}, #{createdAt}, #{updatedAt}
+        )
+    </insert>
+
+    <select id="findSnapshotJson" parameterType="string" resultType="string">
+        SELECT snapshot_json
+        FROM workflow_run_snapshot
+        WHERE run_id = #{_parameter}
+    </select>
+</mapper>

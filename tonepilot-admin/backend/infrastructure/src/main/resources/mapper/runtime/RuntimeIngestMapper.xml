@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tonepilot.infrastructure.runtime.repository.mapper.RuntimeIngestMapper">
+
+    <resultMap id="deviceMap" type="com.tonepilot.infrastructure.runtime.repository.mapper.RuntimeDeviceStorageRecord">
+        <constructor>
+            <arg column="id" javaType="java.lang.String"/>
+            <arg column="user_id" javaType="java.lang.String"/>
+            <arg column="fingerprint" javaType="java.lang.String"/>
+            <arg column="device_name" javaType="java.lang.String"/>
+            <arg column="endpoint" javaType="java.lang.String"/>
+            <arg column="metadata_json" javaType="java.lang.String"/>
+            <arg column="last_seen_at" javaType="java.time.Instant"/>
+            <arg column="created_at" javaType="java.time.Instant"/>
+            <arg column="updated_at" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="eventMap" type="com.tonepilot.domain.runtime.RuntimeEventRecord">
+        <constructor>
+            <arg column="id" javaType="java.lang.String"/>
+            <arg column="user_id" javaType="java.lang.String"/>
+            <arg column="device_id" javaType="java.lang.String"/>
+            <arg column="event_type" javaType="java.lang.String"/>
+            <arg column="session_id" javaType="java.lang.String"/>
+            <arg column="payload_json" javaType="java.lang.String"/>
+            <arg column="created_at" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <select id="findDeviceByFingerprint" parameterType="string" resultMap="deviceMap">
+        SELECT id, user_id, fingerprint, device_name, endpoint, metadata_json, last_seen_at, created_at, updated_at
+        FROM runtime_device
+        WHERE fingerprint = #{_parameter}
+    </select>
+
+    <insert id="insertUser" parameterType="com.tonepilot.infrastructure.runtime.repository.mapper.RuntimeUserStorageRecord">
+        INSERT INTO runtime_user (id, display_name, source, created_at, updated_at)
+        VALUES (#{id}, #{displayName}, #{source}, #{createdAt}, #{updatedAt})
+    </insert>
+
+    <insert id="insertDevice" parameterType="com.tonepilot.infrastructure.runtime.repository.mapper.RuntimeDeviceStorageRecord">
+        INSERT INTO runtime_device (
+            id, user_id, fingerprint, device_name, endpoint, metadata_json, last_seen_at, created_at, updated_at
+        ) VALUES (
+            #{id}, #{userId}, #{fingerprint}, #{deviceName}, #{endpoint}, #{metadataJson}, #{lastSeenAt}, #{createdAt}, #{updatedAt}
+        )
+    </insert>
+
+    <update id="updateDeviceHeartbeat" parameterType="com.tonepilot.infrastructure.runtime.repository.mapper.RuntimeDeviceHeartbeatCommand">
+        UPDATE runtime_device
+        SET device_name = #{deviceName},
+            endpoint = #{endpoint},
+            metadata_json = #{metadataJson},
+            last_seen_at = #{lastSeenAt},
+            updated_at = #{updatedAt}
+        WHERE id = #{id}
+    </update>
+
+    <select id="listDevices" resultMap="deviceMap">
+        SELECT id, user_id, fingerprint, device_name, endpoint, metadata_json, last_seen_at, created_at, updated_at
+        FROM runtime_device
+        ORDER BY last_seen_at DESC
+        LIMIT 100
+    </select>
+
+    <insert id="insertEvent" parameterType="com.tonepilot.domain.runtime.RuntimeEventRecord">
+        INSERT INTO runtime_event (
+            id, user_id, device_id, event_type, session_id, payload_json, created_at
+        ) VALUES (
+            #{id}, #{userId}, #{deviceId}, #{eventType}, #{sessionId}, #{payloadJson}, #{createdAt}
+        )
+    </insert>
+
+    <select id="listEventsByUser" parameterType="string" resultMap="eventMap">
+        SELECT id, user_id, device_id, event_type, session_id, payload_json, created_at
+        FROM runtime_event
+        WHERE user_id = #{_parameter}
+        ORDER BY created_at DESC
+    </select>
+
+    <select id="listEvents" parameterType="com.tonepilot.domain.runtime.RuntimeEventQuery" resultMap="eventMap">
+        SELECT id, user_id, device_id, event_type, session_id, payload_json, created_at
+        FROM runtime_event
+        <where>
+            user_id = #{userId}
+            <if test="sessionId != null and sessionId.trim() != ''">
+                AND session_id = #{sessionId}
+            </if>
+            <if test="eventType != null and eventType.trim() != ''">
+                AND event_type = #{eventType}
+            </if>
+            <if test="traceId != null and traceId.trim() != ''">
+                AND payload_json LIKE CONCAT('%', #{traceId}, '%')
+            </if>
+        </where>
+        ORDER BY created_at DESC
+        LIMIT #{normalizedLimit}
+    </select>
+</mapper>

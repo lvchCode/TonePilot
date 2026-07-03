@@ -13,7 +13,7 @@ import com.tonepilot.domain.storage.StoredFile;
 import com.tonepilot.infrastructure.ai.AiProperties;
 import com.tonepilot.infrastructure.ai.OpenAiCompatibleModelClient;
 import com.tonepilot.infrastructure.ai.dto.StyleKnowledgeModelOutput;
-import com.tonepilot.infrastructure.knowledge.catalog.KnowledgeCatalogJdbcRepository;
+import com.tonepilot.infrastructure.knowledge.catalog.MybatisKnowledgeCatalogRepository;
 import com.tonepilot.infrastructure.knowledge.douyin.DouyinTranscriptService;
 import com.tonepilot.infrastructure.knowledge.douyin.VideoFrameAnalysisService;
 import com.tonepilot.infrastructure.knowledge.douyin.VideoTranscriptService;
@@ -43,7 +43,7 @@ public class KnowledgeMaterialIngestionService {
     @Autowired
     private DomainSnapshotRepository snapshotRepository;
     @Autowired
-    private KnowledgeCatalogJdbcRepository catalogRepository;
+    private MybatisKnowledgeCatalogRepository catalogRepository;
     @Autowired
     private DouyinTranscriptService douyinTranscriptService;
     @Autowired

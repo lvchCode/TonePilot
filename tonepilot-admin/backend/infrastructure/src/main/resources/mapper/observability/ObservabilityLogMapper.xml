@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tonepilot.infrastructure.observability.repository.mapper.ObservabilityLogMapper">
+
+    <resultMap id="llmCallLogMap" type="com.tonepilot.domain.observability.LlmCallLog">
+        <constructor>
+            <arg column="id" javaType="java.lang.String"/>
+            <arg column="run_id" javaType="java.lang.String"/>
+            <arg column="provider" javaType="java.lang.String"/>
+            <arg column="model_name" javaType="java.lang.String"/>
+            <arg column="task_type" javaType="java.lang.String"/>
+            <arg column="success" javaType="boolean"/>
+            <arg column="latency_ms" javaType="long"/>
+            <arg column="prompt_chars" javaType="int"/>
+            <arg column="response_chars" javaType="int"/>
+            <arg column="prompt_preview" javaType="java.lang.String"/>
+            <arg column="response_preview" javaType="java.lang.String"/>
+            <arg column="error_message" javaType="java.lang.String"/>
+            <arg column="started_at" javaType="java.time.Instant"/>
+            <arg column="finished_at" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="auditEventMap" type="com.tonepilot.domain.observability.AuditEvent">
+        <constructor>
+            <arg column="id" javaType="java.lang.String"/>
+            <arg column="event_type" javaType="java.lang.String"/>
+            <arg column="actor" javaType="java.lang.String"/>
+            <arg column="run_id" javaType="java.lang.String"/>
+            <arg column="target_type" javaType="java.lang.String"/>
+            <arg column="target_id" javaType="java.lang.String"/>
+            <arg column="detail" javaType="java.lang.String"/>
+            <arg column="created_at" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <insert id="insertLlmCall" parameterType="com.tonepilot.domain.observability.LlmCallLog">
+        INSERT INTO llm_call_log (
+            id, run_id, provider, model_name, task_type, success, latency_ms,
+            prompt_chars, response_chars, prompt_preview, response_preview,
+            error_message, started_at, finished_at
+        ) VALUES (
+            #{id}, #{runId}, #{provider}, #{modelName}, #{taskType}, #{success}, #{latencyMs},
+            #{promptChars}, #{responseChars}, #{promptPreview}, #{responsePreview},
+            #{errorMessage}, #{startedAt}, #{finishedAt}
+        )
+    </insert>
+
+    <insert id="insertAuditEvent" parameterType="com.tonepilot.domain.observability.AuditEvent">
+        INSERT INTO audit_event (
+            id, event_type, actor, run_id, target_type, target_id, detail, created_at
+        ) VALUES (
+            #{id}, #{eventType}, #{actor}, #{runId}, #{targetType}, #{targetId}, #{detail}, #{createdAt}
+        )
+    </insert>
+
+    <select id="listLatestLlmCalls" parameterType="com.tonepilot.infrastructure.observability.repository.mapper.ObservabilityLimitQuery" resultMap="llmCallLogMap">
+        SELECT id, run_id, provider, model_name, task_type, success, latency_ms,
+               prompt_chars, response_chars, prompt_preview, response_preview,
+               error_message, started_at, finished_at
+        FROM llm_call_log
+        ORDER BY started_at DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="listLatestAuditEvents" parameterType="com.tonepilot.infrastructure.observability.repository.mapper.ObservabilityLimitQuery" resultMap="auditEventMap">
+        SELECT id, event_type, actor, run_id, target_type, target_id, detail, created_at
+        FROM audit_event
+        ORDER BY created_at DESC
+        LIMIT #{limit}
+    </select>
+</mapper>

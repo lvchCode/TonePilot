@@ -1,49 +1,9 @@
 package com.tonepilot.application.agent.workflow;
 
-import com.tonepilot.application.agent.*;
-import com.tonepilot.application.agent.workflow.*;
-import com.tonepilot.application.agent.workflow.node.*;
-import com.tonepilot.application.controller.*;
-import com.tonepilot.application.controller.admin.*;
-import com.tonepilot.application.dto.*;
-import com.tonepilot.application.evaluation.*;
-import com.tonepilot.application.knowledge.*;
-import com.tonepilot.application.photo.*;
-import com.tonepilot.application.runtime.*;
-import com.tonepilot.application.style.*;
-import com.tonepilot.domain.agent.*;
-import com.tonepilot.domain.agent.workflow.*;
-import com.tonepilot.domain.colorgrading.*;
-import com.tonepilot.domain.common.*;
-import com.tonepilot.domain.evaluation.*;
-import com.tonepilot.domain.knowledge.*;
-import com.tonepilot.domain.observability.*;
-import com.tonepilot.domain.photo.*;
-import com.tonepilot.domain.runtime.*;
-import com.tonepilot.domain.storage.*;
-import com.tonepilot.domain.style.*;
-import com.tonepilot.repository.observability.*;
-import com.tonepilot.repository.runtime.*;
-import com.tonepilot.infrastructure.agent.*;
-import com.tonepilot.infrastructure.ai.*;
-import com.tonepilot.infrastructure.ai.dto.*;
-import com.tonepilot.infrastructure.knowledge.douyin.*;
-import com.tonepilot.infrastructure.knowledge.rag.*;
-import com.tonepilot.infrastructure.knowledge.rag.config.*;
-import com.tonepilot.infrastructure.observability.*;
-import com.tonepilot.infrastructure.observability.config.*;
-import com.tonepilot.infrastructure.observability.repository.*;
-import com.tonepilot.infrastructure.runtime.repository.*;
-import com.tonepilot.infrastructure.shared.persistence.*;
-import com.tonepilot.infrastructure.storage.*;
-import com.tonepilot.infrastructure.storage.config.*;
-
-
-
-
-
-
-
+import com.tonepilot.repository.workflow.WorkflowRunStorageRecord;
+import com.tonepilot.repository.workflow.WorkflowRunSnapshotStore;
+import com.tonepilot.domain.agent.workflow.WorkflowRunSnapshot;
+import com.tonepilot.domain.agent.workflow.TonePilotAgentContext;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -53,10 +13,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
-import java.sql.Timestamp;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -71,7 +29,7 @@ public class WorkflowRunRepository {
     private final WorkflowProperties properties;
     private final PersistenceProperties persistenceProperties;
     private final ObjectProvider<StringRedisTemplate> redisTemplateProvider;
-    private final ObjectProvider<JdbcTemplate> jdbcTemplateProvider;
+    private final ObjectProvider<WorkflowRunSnapshotStore> snapshotStoreProvider;
     private final Map<String, WorkflowRunSnapshot> localSnapshots = new ConcurrentHashMap<>();
 
     @Autowired
@@ -81,14 +39,14 @@ public class WorkflowRunRepository {
             WorkflowProperties properties,
             PersistenceProperties persistenceProperties,
             ObjectProvider<StringRedisTemplate> redisTemplateProvider,
-            ObjectProvider<JdbcTemplate> jdbcTemplateProvider
+            ObjectProvider<WorkflowRunSnapshotStore> snapshotStoreProvider
     ) {
         this.store = store;
         this.objectMapper = objectMapper;
         this.properties = properties;
         this.persistenceProperties = persistenceProperties;
         this.redisTemplateProvider = redisTemplateProvider;
-        this.jdbcTemplateProvider = jdbcTemplateProvider;
+        this.snapshotStoreProvider = snapshotStoreProvider;
     }
 
     public void save(TonePilotAgentContext context) {
@@ -124,47 +82,25 @@ public class WorkflowRunRepository {
             return;
         }
         try {
-            JdbcTemplate jdbcTemplate = jdbcTemplateProvider.getIfAvailable();
-            if (jdbcTemplate == null) {
+            WorkflowRunSnapshotStore snapshotStore = snapshotStoreProvider.getIfAvailable();
+            if (snapshotStore == null) {
                 return;
             }
             WorkflowRunSnapshot snapshot = WorkflowRunSnapshot.from(context, "database");
-            String json = objectMapper.writeValueAsString(snapshot);
-            int updated = jdbcTemplate.update("""
-                            UPDATE workflow_run_snapshot
-                            SET photo_id = ?, status = ?, provider = ?, target_style = ?, current_agent = ?,
-                                storage = ?, snapshot_json = ?, created_at = ?, updated_at = ?
-                            WHERE run_id = ?
-                            """,
+            WorkflowRunStorageRecord record = new WorkflowRunStorageRecord(
+                    snapshot.runId(),
                     snapshot.photoId(),
                     snapshot.status(),
                     snapshot.provider(),
                     snapshot.targetStyle(),
                     snapshot.currentAgent(),
                     snapshot.storage(),
-                    json,
-                    Timestamp.from(snapshot.createdAt()),
-                    Timestamp.from(snapshot.updatedAt()),
-                    snapshot.runId()
+                    objectMapper.writeValueAsString(snapshot),
+                    snapshot.createdAt(),
+                    snapshot.updatedAt()
             );
-            if (updated == 0) {
-                jdbcTemplate.update("""
-                                INSERT INTO workflow_run_snapshot (
-                                    run_id, photo_id, status, provider, target_style, current_agent,
-                                    storage, snapshot_json, created_at, updated_at
-                                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                                """,
-                        snapshot.runId(),
-                        snapshot.photoId(),
-                        snapshot.status(),
-                        snapshot.provider(),
-                        snapshot.targetStyle(),
-                        snapshot.currentAgent(),
-                        snapshot.storage(),
-                        json,
-                        Timestamp.from(snapshot.createdAt()),
-                        Timestamp.from(snapshot.updatedAt())
-                );
+            if (snapshotStore.updateSnapshot(record) == 0) {
+                snapshotStore.insertSnapshot(record);
             }
         } catch (Exception exception) {
             log.debug("工作流快照写入数据库失败，已保留在 Redis/本地缓存：{}", exception.getMessage());
@@ -176,21 +112,15 @@ public class WorkflowRunRepository {
             return Optional.empty();
         }
         try {
-            JdbcTemplate jdbcTemplate = jdbcTemplateProvider.getIfAvailable();
-            if (jdbcTemplate == null) {
+            WorkflowRunSnapshotStore snapshotStore = snapshotStoreProvider.getIfAvailable();
+            if (snapshotStore == null) {
                 return Optional.empty();
             }
-            return jdbcTemplate.query(
-                    "SELECT snapshot_json FROM workflow_run_snapshot WHERE run_id = ?",
-                    resultSet -> {
-                        if (!resultSet.next()) {
-                            return Optional.<WorkflowRunSnapshot>empty();
-                        }
-                        WorkflowRunSnapshot snapshot = readSnapshot(resultSet.getString("snapshot_json"));
-                        return Optional.of(snapshot.withStorage("database"));
-                    },
-                    runId
-            );
+            String json = snapshotStore.findSnapshotJson(runId);
+            if (json == null || json.isBlank()) {
+                return Optional.empty();
+            }
+            return Optional.of(readSnapshot(json).withStorage("database"));
         } catch (Exception exception) {
             log.debug("工作流快照读取数据库失败，已尝试本地缓存：{}", exception.getMessage());
             return Optional.empty();

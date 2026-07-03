@@ -9,27 +9,54 @@
         </div>
       </div>
 
-      <el-menu :default-active="activeView" class="nav-menu" @select="activeView = $event">
-        <el-menu-item index="styles">
-          <el-icon><Operation /></el-icon>
-          <span>风格库</span>
-        </el-menu-item>
-        <el-menu-item index="knowledge">
-          <el-icon><Collection /></el-icon>
-          <span>知识库</span>
-        </el-menu-item>
-        <el-menu-item index="materials">
-          <el-icon><Files /></el-icon>
-          <span>素材导入</span>
-        </el-menu-item>
-        <el-menu-item index="samples">
-          <el-icon><Picture /></el-icon>
-          <span>样片管理</span>
-        </el-menu-item>
-        <el-menu-item index="observability">
-          <el-icon><DataLine /></el-icon>
-          <span>观测评估</span>
-        </el-menu-item>
+      <el-menu :default-active="activeMenuIndex" class="nav-menu" @select="handleMenuSelect">
+        <el-sub-menu index="business-pages">
+          <template #title>
+            <el-icon><Operation /></el-icon>
+            <span>业务管理</span>
+          </template>
+          <el-menu-item index="styles">
+            <el-icon><Operation /></el-icon>
+            <span>风格库</span>
+          </el-menu-item>
+          <el-menu-item index="knowledge">
+            <el-icon><Collection /></el-icon>
+            <span>知识库</span>
+          </el-menu-item>
+          <el-menu-item index="materials">
+            <el-icon><Files /></el-icon>
+            <span>素材导入</span>
+          </el-menu-item>
+          <el-menu-item index="samples">
+            <el-icon><Picture /></el-icon>
+            <span>样片管理</span>
+          </el-menu-item>
+          <el-menu-item index="observability">
+            <el-icon><DataLine /></el-icon>
+            <span>观测评估</span>
+          </el-menu-item>
+        </el-sub-menu>
+
+        <el-sub-menu index="data-pages">
+          <template #title>
+            <el-icon><DataAnalysis /></el-icon>
+            <span>数据管理</span>
+          </template>
+          <el-sub-menu
+            v-for="group in dataTableGroups"
+            :key="group.id"
+            :index="`data-group:${group.id}`"
+          >
+            <template #title>{{ group.label }}</template>
+            <el-menu-item
+              v-for="table in group.children"
+              :key="table.tableName"
+              :index="`data:${table.tableName}`"
+            >
+              <span>{{ table.label }}</span>
+            </el-menu-item>
+          </el-sub-menu>
+        </el-sub-menu>
       </el-menu>
     </aside>
 
@@ -497,13 +524,130 @@
           </div>
         </div>
       </section>
-    </main>
+
+
+      <section v-if="activeView === 'data'" class="grid data-grid">
+        <div class="panel data-panel">
+          <div class="panel-title">
+            <div>
+              <h3>{{ activeDataTable?.label || '数据表' }}</h3>
+              <p class="panel-subtitle">{{ activeDataTable?.description || '选择左侧树形菜单中的数据表。' }}</p>
+            </div>
+            <div class="title-actions">
+              <el-input
+                v-model="dataKeyword"
+                clearable
+                class="data-search"
+                placeholder="搜索当前表"
+                @keyup.enter="loadDataRows"
+                @clear="loadDataRows"
+              />
+              <el-button :icon="Refresh" @click="loadDataRows">刷新</el-button>
+              <el-button
+                v-if="activeDataTable?.editable"
+                :icon="Plus"
+                type="primary"
+                @click="openCreateDataRow"
+              >
+                新增
+              </el-button>
+            </div>
+          </div>
+
+          <el-alert
+            v-if="activeDataTable && !activeDataTable.editable"
+            class="inline-alert"
+            type="warning"
+            :closable="false"
+            title="这张表属于运行日志、审计链路或系统快照，当前仅开放只读查看，避免破坏 Agent 调用链。"
+          />
+
+          <el-table
+            :data="dataRows"
+            height="620"
+            border
+            v-loading="loadingDataRows"
+            empty-text="暂无数据"
+          >
+            <el-table-column
+              v-for="column in activeDataTable?.columns || []"
+              :key="column.name"
+              :prop="column.name"
+              :label="column.label"
+              :min-width="dataColumnWidth(column)"
+              show-overflow-tooltip
+            >
+              <template #default="{ row }">
+                <span :class="{ 'cell-mono': column.type === 'json' || column.type === 'longText' }">
+                  {{ shortCell(row[column.name], column.type) }}
+                </span>
+              </template>
+            </el-table-column>
+            <el-table-column v-if="activeDataTable?.editable" label="操作" fixed="right" width="132">
+              <template #default="{ row }">
+                <el-button size="small" text @click="openEditDataRow(row)">编辑</el-button>
+                <el-button size="small" text type="danger" @click="deleteDataRow(row)">删除</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+
+          <div class="data-pagination">
+            <span>共 {{ dataTotal }} 条</span>
+            <el-pagination
+              v-model:current-page="dataPage"
+              v-model:page-size="dataSize"
+              layout="sizes, prev, pager, next"
+              :page-sizes="[10, 20, 50, 100]"
+              :total="dataTotal"
+              @current-change="loadDataRows"
+              @size-change="loadDataRows"
+            />
+          </div>
+        </div>
+
+        <el-dialog v-model="dataDialogVisible" :title="dataDialogTitle" width="760px">
+          <el-form v-if="activeDataTable" label-position="top" class="data-form-grid">
+            <el-form-item
+              v-for="column in writableDataColumns"
+              :key="column.name"
+              :label="column.label"
+            >
+              <el-switch
+                v-if="column.type === 'boolean'"
+                v-model="dataRowForm[column.name]"
+                active-text="是"
+                inactive-text="否"
+              />
+              <el-input-number
+                v-else-if="column.type === 'number'"
+                v-model="dataRowForm[column.name]"
+                class="full-input"
+              />
+              <el-input
+                v-else-if="column.type === 'json' || column.type === 'longText'"
+                v-model="dataRowForm[column.name]"
+                type="textarea"
+                :rows="column.type === 'json' ? 8 : 5"
+                :placeholder="column.type === 'json' ? '请输入合法 JSON 或文本' : ''"
+              />
+              <el-input
+                v-else
+                v-model="dataRowForm[column.name]"
+              />
+            </el-form-item>
+          </el-form>
+          <template #footer>
+            <el-button @click="dataDialogVisible = false">取消</el-button>
+            <el-button type="primary" @click="saveDataRow">保存</el-button>
+          </template>
+        </el-dialog>
+      </section>    </main>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadFile } from 'element-plus'
 import {
   CircleCheck,
@@ -533,7 +677,46 @@ type RuntimeTreeNode = {
   children?: RuntimeTreeNode[]
 }
 
+type DataColumn = {
+  name: string
+  label: string
+  type: 'text' | 'number' | 'boolean' | 'timestamp' | 'json' | 'longText'
+  editable: boolean
+  required: boolean
+  primaryKey: boolean
+}
+
+type DataTable = {
+  tableName: string
+  label: string
+  description: string
+  editable: boolean
+  primaryKey: string
+  orderColumn: string
+  columns: DataColumn[]
+  searchableColumns: string[]
+}
+
+type DataTableGroup = {
+  id: string
+  label: string
+  description: string
+  children: DataTable[]
+}
+
 const activeView = ref('styles')
+const dataTableGroups = ref<DataTableGroup[]>([])
+const activeDataTableName = ref('')
+const dataRows = ref<any[]>([])
+const dataTotal = ref(0)
+const dataPage = ref(1)
+const dataSize = ref(20)
+const dataKeyword = ref('')
+const loadingDataRows = ref(false)
+const dataDialogVisible = ref(false)
+const dataEditMode = ref<'create' | 'edit'>('create')
+const dataEditingRowKey = ref('')
+const dataRowForm = reactive<Record<string, any>>({})
 const styles = ref<any[]>([])
 const adminKnowledge = ref<any[]>([])
 const knowledgeSources = ref<any[]>([])
@@ -596,6 +779,15 @@ const visibleRuntimeEvents = computed(() => runtimeEventViewMode.value === 'all'
 )
 const runtimeExecutions = computed(() => buildRuntimeExecutionSummaries(visibleRuntimeEvents.value))
 const selectedKnowledgeSource = computed(() => knowledgeSources.value.find(source => source.id === selectedSourceId.value))
+
+const activeMenuIndex = computed(() => activeView.value === 'data' && activeDataTableName.value
+  ? `data:${activeDataTableName.value}`
+  : activeView.value
+)
+const allDataTables = computed(() => dataTableGroups.value.flatMap(group => group.children))
+const activeDataTable = computed(() => allDataTables.value.find(table => table.tableName === activeDataTableName.value))
+const writableDataColumns = computed(() => activeDataTable.value?.columns.filter(column => column.editable) || [])
+const dataDialogTitle = computed(() => `${dataEditMode.value === 'create' ? '新增' : '编辑'}${activeDataTable.value?.label || '数据'}`)
 
 const runtimeEventStats = computed(() => {
   const sessions = new Set<string>()
@@ -672,6 +864,7 @@ const pageTitle = computed(() => {
   if (activeView.value === 'materials') return '调色素材导入'
   if (activeView.value === 'samples') return '风格样片'
   if (activeView.value === 'observability') return '观测与评估'
+  if (activeView.value === 'data') return activeDataTable.value?.label || '数据管理'
   return '风格库'
 })
 
@@ -680,6 +873,7 @@ const pageSubtitle = computed(() => {
   if (activeView.value === 'materials') return '登记抖音教程、大师调色记录、手工笔记等来源，并抽取成待审核知识'
   if (activeView.value === 'samples') return '上传管理员样片，分析风格并生成可审核知识'
   if (activeView.value === 'observability') return '追踪本地运行时用户输入、Agent 决策、大模型回复和 Lightroom 工具调用'
+  if (activeView.value === 'data') return activeDataTable.value?.description || '按树形菜单查看和维护管理端数据表'
   return '维护用户端插件可引用的调色风格定义'
 })
 
@@ -693,7 +887,119 @@ watch(activeView, async value => {
   if (value === 'observability') {
     await loadObservability()
   }
+  if (value === 'data') {
+    await loadDataRows()
+  }
 })
+
+function handleMenuSelect(index: string) {
+  if (index.startsWith('data:')) {
+    activeView.value = 'data'
+    activeDataTableName.value = index.slice('data:'.length)
+    dataPage.value = 1
+    void loadDataRows()
+    return
+  }
+  activeView.value = index
+}
+
+async function loadDataTableTree() {
+  dataTableGroups.value = await unwrap<DataTableGroup[]>(api.get('/api/admin/data/tables/tree'))
+  if (!activeDataTableName.value) {
+    const firstTable = dataTableGroups.value.flatMap(group => group.children)[0]
+    activeDataTableName.value = firstTable?.tableName || ''
+  }
+}
+
+async function loadDataRows() {
+  if (!activeDataTableName.value) return
+  loadingDataRows.value = true
+  try {
+    const payload = await unwrap<any>(api.get(`/api/admin/data/tables/${activeDataTableName.value}/rows`, {
+      params: {
+        keyword: dataKeyword.value || undefined,
+        page: dataPage.value,
+        size: dataSize.value
+      }
+    }))
+    dataRows.value = payload.rows || []
+    dataTotal.value = payload.total || 0
+  } finally {
+    loadingDataRows.value = false
+  }
+}
+
+function openCreateDataRow() {
+  dataEditMode.value = 'create'
+  dataEditingRowKey.value = ''
+  resetDataRowForm()
+  dataDialogVisible.value = true
+}
+
+function openEditDataRow(row: any) {
+  dataEditMode.value = 'edit'
+  dataEditingRowKey.value = row._rowKey
+  resetDataRowForm(row)
+  dataDialogVisible.value = true
+}
+
+function resetDataRowForm(row?: any) {
+  Object.keys(dataRowForm).forEach(key => delete dataRowForm[key])
+  writableDataColumns.value.forEach(column => {
+    dataRowForm[column.name] = row?.[column.name] ?? defaultDataValue(column)
+  })
+}
+
+function defaultDataValue(column: DataColumn) {
+  if (column.type === 'boolean') return false
+  if (column.type === 'number') return undefined
+  if (column.type === 'json') return ''
+  return ''
+}
+
+async function saveDataRow() {
+  if (!activeDataTable.value) return
+  const payload = Object.fromEntries(
+    Object.entries(dataRowForm).filter(([, value]) => value !== undefined && value !== null)
+  )
+  if (dataEditMode.value === 'create') {
+    await unwrap(api.post(`/api/admin/data/tables/${activeDataTable.value.tableName}/rows`, payload))
+    ElMessage.success('数据已新增')
+  } else {
+    await unwrap(api.put(`/api/admin/data/tables/${activeDataTable.value.tableName}/rows/${dataEditingRowKey.value}`, payload))
+    ElMessage.success('数据已更新')
+  }
+  dataDialogVisible.value = false
+  await loadDataRows()
+}
+
+async function deleteDataRow(row: any) {
+  if (!activeDataTable.value) return
+  await ElMessageBox.confirm(`确认删除 ${activeDataTable.value.label} 的这条数据吗？`, '删除确认', {
+    type: 'warning',
+    confirmButtonText: '删除',
+    cancelButtonText: '取消'
+  })
+  await unwrap(api.delete(`/api/admin/data/tables/${activeDataTable.value.tableName}/rows/${row._rowKey}`))
+  ElMessage.success('数据已删除')
+  await loadDataRows()
+}
+
+function shortCell(value: any, type: string) {
+  if (value === null || value === undefined || value === '') return '-'
+  const text = typeof value === 'object' ? JSON.stringify(value) : String(value)
+  if (type === 'json' || type === 'longText') {
+    return text.length > 120 ? `${text.slice(0, 120)}...` : text
+  }
+  return text
+}
+
+function dataColumnWidth(column: DataColumn) {
+  if (column.type === 'json' || column.type === 'longText') return 280
+  if (column.type === 'timestamp') return 180
+  if (column.primaryKey) return 150
+  return 140
+}
 
 function selectStyle(row: any) {
   sampleForm.styleId = row.id
@@ -1142,6 +1448,6 @@ function splitValues(value: string) {
 }
 
 onMounted(async () => {
-  await Promise.all([loadStyles(), loadAdminKnowledge(), loadKnowledgeSources()])
+  await Promise.all([loadStyles(), loadAdminKnowledge(), loadKnowledgeSources(), loadDataTableTree()])
 })
 </script>

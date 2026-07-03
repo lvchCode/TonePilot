@@ -11,6 +11,8 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.nio.charset.StandardCharsets;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -20,6 +22,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "tonepilot.persistence.enabled=false",
         "tonepilot.rate-limit.enabled=false",
         "tonepilot.ingestion.video.transcript-override=上传视频字幕：先压高光，再提高阴影，蓝色饱和度降低。",
+        "tonepilot.ingestion.video.visual-analysis-override=关键帧视觉分析：画面是蓝调夜景，原片偏灰，教程展示了天空压暗、蓝色降低饱和度、曲线增加对比。",
         "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration"
 })
 @AutoConfigureMockMvc
@@ -65,6 +68,27 @@ class AdminKnowledgeMaterialControllerTest {
         assertThat(jobResponse.path("data").path("generatedKnowledgeId").asLong()).isPositive();
     }
 
+
+    @Test
+    void douyinLinkImportWithoutTranscriptReturnsReadableBadRequest() throws Exception {
+        String response = mockMvc.perform(post("/api/admin/knowledge-sources/douyin-imports")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "videoUrl": "https://v.douyin.com/d5-hcVmtAOU/",
+                                  "title": "watchluke 蓝调忧郁感"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andReturn()
+                .getResponse()
+                .getContentAsString(StandardCharsets.UTF_8);
+
+        JsonNode payload = objectMapper.readTree(response);
+        assertThat(payload.path("success").asBoolean()).isFalse();
+        assertThat(payload.path("message").asText()).contains("上传抖音视频文件入口");
+    }
+
     @Test
     void uploadsDouyinVideoAndExtractsKnowledge() throws Exception {
         MockMultipartFile file = new MockMultipartFile(
@@ -83,12 +107,22 @@ class AdminKnowledgeMaterialControllerTest {
                 .andExpect(status().isOk())
                 .andReturn()
                 .getResponse()
-                .getContentAsString();
+                .getContentAsString(StandardCharsets.UTF_8);
 
         JsonNode payload = objectMapper.readTree(response);
         assertThat(payload.path("success").asBoolean()).isTrue();
         assertThat(payload.path("data").path("status").asText()).isEqualTo("succeeded");
         assertThat(payload.path("data").path("generatedKnowledgeId").asLong()).isPositive();
+
+        long sourceId = payload.path("data").path("sourceId").asLong();
+        String materialsResponse = mockMvc.perform(
+                        org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/admin/knowledge-sources/" + sourceId + "/materials"))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString(StandardCharsets.UTF_8);
+        JsonNode materialsPayload = objectMapper.readTree(materialsResponse);
+        assertThat(materialsPayload.path("data").get(0).path("content").asText()).contains("关键帧视觉分析");
     }
 
     private JsonNode postJson(String url, String body) throws Exception {
@@ -98,7 +132,7 @@ class AdminKnowledgeMaterialControllerTest {
                 .andExpect(status().isOk())
                 .andReturn()
                 .getResponse()
-                .getContentAsString();
+                .getContentAsString(StandardCharsets.UTF_8);
         return objectMapper.readTree(response);
     }
 }

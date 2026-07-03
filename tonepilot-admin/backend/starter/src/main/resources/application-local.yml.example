@@ -71,6 +71,10 @@ tonepilot:
       language: ${TONEPILOT_VIDEO_LANGUAGE:zh}
       timeout-seconds: ${TONEPILOT_VIDEO_TIMEOUT_SECONDS:900}
       transcript-override: ${TONEPILOT_VIDEO_TRANSCRIPT_OVERRIDE:}
+      frame-analysis-enabled: ${TONEPILOT_VIDEO_FRAME_ANALYSIS_ENABLED:true}
+      frame-interval-seconds: ${TONEPILOT_VIDEO_FRAME_INTERVAL_SECONDS:5}
+      max-keyframes: ${TONEPILOT_VIDEO_MAX_KEYFRAMES:6}
+      visual-analysis-override: ${TONEPILOT_VIDEO_VISUAL_ANALYSIS_OVERRIDE:}
   ai:
     # rule / openai / qwen2
     provider: rule

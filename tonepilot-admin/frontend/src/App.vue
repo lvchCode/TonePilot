@@ -138,12 +138,13 @@
         </div>
       </section>
 
-      <section v-if="activeView === 'materials'" class="grid two">
-        <div class="panel">
+      <section v-if="activeView === 'materials'" class="grid materials-grid">
+        <div class="panel source-panel">
           <div class="panel-title">
-            <h3>登记知识来源</h3>
+            <h3>素材来源</h3>
             <el-button :icon="Plus" type="primary" @click="createKnowledgeSource">保存来源</el-button>
           </div>
+
           <el-form label-position="top">
             <el-form-item label="来源类型">
               <el-select v-model="sourceForm.sourceType">
@@ -173,102 +174,140 @@
               </el-select>
             </el-form-item>
             <el-form-item label="备注">
-              <el-input v-model="sourceForm.notes" type="textarea" :rows="4" />
+              <el-input v-model="sourceForm.notes" type="textarea" :rows="3" placeholder="来源背景、账号信息、适合沉淀的调色方向" />
             </el-form-item>
           </el-form>
-        </div>
 
-        <div class="panel">
-          <div class="panel-title">
-            <h3>素材与抽取</h3>
-            <el-button :icon="Refresh" @click="loadKnowledgeSources">刷新来源</el-button>
+          <el-divider />
+
+          <div class="panel-title compact">
+            <h3>来源列表</h3>
+            <el-button :icon="Refresh" @click="loadKnowledgeSources">刷新</el-button>
           </div>
-
-          <el-form label-position="top" class="inline-import">
-            <el-form-item label="抖音视频链接">
-              <el-input v-model="douyinForm.videoUrl" placeholder="粘贴抖音作品链接或完整分享文案，系统会提取字幕并生成待审核知识" />
-            </el-form-item>
-            <el-form-item label="标题">
-              <el-input v-model="douyinForm.title" placeholder="例如：城市夜景电影感教程" />
-            </el-form-item>
-            <el-form-item label="作者">
-              <el-input v-model="douyinForm.author" placeholder="可选" />
-            </el-form-item>
-            <el-form-item label="备注/已知调色步骤">
-              <el-input v-model="douyinForm.notes" type="textarea" :rows="3" placeholder="可选：未配置外部转写命令时，请在这里粘贴视频字幕或调色步骤" />
-            </el-form-item>
-            <el-button :icon="Upload" type="primary" :loading="importingDouyin" @click="importDouyinVideo">
-              导入抖音并生成知识
-            </el-button>
-          </el-form>
-
-          <el-divider />
-
-          <el-form label-position="top" class="inline-import">
-            <el-form-item label="上传抖音视频文件">
-              <el-upload
-                :auto-upload="false"
-                :limit="1"
-                accept=".mp4,.mov,.m4v,.webm"
-                :on-change="handleDouyinVideoFileChange"
-                :on-remove="removeDouyinVideoFile"
-              >
-                <el-button :icon="Upload">选择视频</el-button>
-              </el-upload>
-            </el-form-item>
-            <el-form-item label="视频标题">
-              <el-input v-model="douyinUploadForm.title" placeholder="例如：watchluke 蓝调忧郁感" />
-            </el-form-item>
-            <el-form-item label="作者">
-              <el-input v-model="douyinUploadForm.author" placeholder="可选" />
-            </el-form-item>
-            <el-form-item label="备注">
-              <el-input v-model="douyinUploadForm.notes" type="textarea" :rows="3" placeholder="可选：账号、期数、你希望保留的调色要点" />
-            </el-form-item>
-            <el-button :icon="Upload" type="primary" :loading="uploadingDouyinVideo" @click="uploadDouyinVideo">
-              上传视频并生成知识
-            </el-button>
-          </el-form>
-
-          <el-divider />
-
-          <el-table :data="knowledgeSources" height="180" highlight-current-row @row-click="selectKnowledgeSource">
+          <el-table :data="knowledgeSources" height="260" highlight-current-row @row-click="selectKnowledgeSource">
             <el-table-column prop="title" label="来源" min-width="180" />
             <el-table-column prop="sourceType" label="类型" width="150" />
             <el-table-column prop="author" label="作者" width="120" />
           </el-table>
+        </div>
 
-          <el-divider />
+        <div class="panel import-panel">
+          <div class="panel-title">
+            <h3>导入工作台</h3>
+            <el-tag v-if="selectedKnowledgeSource" effect="plain">
+              当前来源：{{ selectedKnowledgeSource.title }}
+            </el-tag>
+          </div>
 
-          <el-form label-position="top">
-            <el-form-item label="素材类型">
-              <el-select v-model="materialForm.materialType">
-                <el-option label="字幕/转写文本" value="transcript" />
-                <el-option label="教程摘要" value="summary" />
-                <el-option label="Lightroom 参数" value="lightroom_params" />
-                <el-option label="参数变化记录" value="param_delta" />
-                <el-option label="XMP 片段" value="xmp" />
-                <el-option label="手工文本" value="manual_text" />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="素材标题">
-              <el-input v-model="materialForm.title" placeholder="例如：第 1 段字幕摘要" />
-            </el-form-item>
-            <el-form-item label="语言">
-              <el-input v-model="materialForm.language" />
-            </el-form-item>
-            <el-form-item label="素材内容">
-              <el-input v-model="materialForm.content" type="textarea" :rows="7" placeholder="粘贴字幕、教程摘要、调色参数或 XMP 内容" />
-            </el-form-item>
-            <el-button :icon="Upload" type="primary" @click="importKnowledgeMaterial">导入素材</el-button>
-          </el-form>
+          <el-alert
+            class="inline-alert"
+            type="info"
+            :closable="false"
+            title="推荐上传视频文件：系统会抽音频转字幕，并抽关键帧做视觉分析；只有抖音链接时，请同时粘贴字幕、摘要或调色步骤。"
+          />
 
-          <el-divider />
+          <el-tabs v-model="materialImportMode" class="material-tabs">
+            <el-tab-pane label="上传视频解析" name="video">
+              <el-form label-position="top" class="inline-import">
+                <el-form-item label="抖音视频文件">
+                  <el-upload
+                    :auto-upload="false"
+                    :limit="1"
+                    accept=".mp4,.mov,.m4v,.webm"
+                    :on-change="handleDouyinVideoFileChange"
+                    :on-remove="removeDouyinVideoFile"
+                  >
+                    <el-button :icon="Upload">选择 MP4 / MOV / WEBM</el-button>
+                  </el-upload>
+                </el-form-item>
+                <div class="form-row">
+                  <el-form-item label="视频标题">
+                    <el-input v-model="douyinUploadForm.title" placeholder="例如：watchluke 蓝调忧郁感" />
+                  </el-form-item>
+                  <el-form-item label="作者">
+                    <el-input v-model="douyinUploadForm.author" placeholder="可选" />
+                  </el-form-item>
+                </div>
+                <el-form-item label="备注">
+                  <el-input v-model="douyinUploadForm.notes" type="textarea" :rows="4" placeholder="账号、期数、你希望保留的调色要点" />
+                </el-form-item>
+                <el-button :icon="Upload" type="primary" :loading="uploadingDouyinVideo" @click="uploadDouyinVideo">
+                  上传视频，转字幕并分析画面
+                </el-button>
+              </el-form>
+            </el-tab-pane>
 
-          <el-table :data="knowledgeMaterials" height="220">
-            <el-table-column prop="title" label="素材" min-width="180" />
+            <el-tab-pane label="链接 + 字幕摘要" name="link">
+              <el-form label-position="top" class="inline-import">
+                <el-form-item label="抖音分享文案或链接">
+                  <el-input v-model="douyinForm.videoUrl" placeholder="粘贴抖音作品链接或完整分享文案" />
+                </el-form-item>
+                <div class="form-row">
+                  <el-form-item label="标题">
+                    <el-input v-model="douyinForm.title" placeholder="例如：城市夜景电影感教程" />
+                  </el-form-item>
+                  <el-form-item label="作者">
+                    <el-input v-model="douyinForm.author" placeholder="可选" />
+                  </el-form-item>
+                </div>
+                <el-form-item label="字幕 / 摘要 / 调色步骤">
+                  <el-input v-model="douyinForm.notes" type="textarea" :rows="6" placeholder="必须填写：粘贴视频字幕、调色步骤或教程摘要；只贴链接无法获取画面和音频。" />
+                </el-form-item>
+                <el-button :icon="Upload" type="primary" :loading="importingDouyin" @click="importDouyinVideo">
+                  导入链接素材并生成知识
+                </el-button>
+              </el-form>
+            </el-tab-pane>
+
+            <el-tab-pane label="手工素材" name="manual">
+              <el-form label-position="top">
+                <el-form-item label="素材类型">
+                  <el-select v-model="materialForm.materialType">
+                    <el-option label="字幕/转写文本" value="transcript" />
+                    <el-option label="教程摘要" value="summary" />
+                    <el-option label="Lightroom 参数" value="lightroom_params" />
+                    <el-option label="参数变化记录" value="param_delta" />
+                    <el-option label="XMP 片段" value="xmp" />
+                    <el-option label="手工文本" value="manual_text" />
+                  </el-select>
+                </el-form-item>
+                <el-form-item label="素材标题">
+                  <el-input v-model="materialForm.title" placeholder="例如：第 1 段字幕摘要" />
+                </el-form-item>
+                <el-form-item label="语言">
+                  <el-input v-model="materialForm.language" />
+                </el-form-item>
+                <el-form-item label="素材内容">
+                  <el-input v-model="materialForm.content" type="textarea" :rows="8" placeholder="粘贴字幕、教程摘要、调色参数或 XMP 内容" />
+                </el-form-item>
+                <el-button :icon="Upload" type="primary" @click="importKnowledgeMaterial">导入到当前来源</el-button>
+              </el-form>
+            </el-tab-pane>
+          </el-tabs>
+
+          <div v-if="lastIngestionJob" class="ingestion-result">
+            <strong>最近导入</strong>
+            <span>来源 #{{ lastIngestionJob.sourceId }} / 素材 #{{ lastIngestionJob.materialId }}</span>
+            <span>已生成待审核知识 #{{ lastIngestionJob.generatedKnowledgeId }}</span>
+          </div>
+        </div>
+
+        <div class="panel materials-panel">
+          <div class="panel-title">
+            <h3>当前来源素材</h3>
+            <el-button
+              :icon="Refresh"
+              :disabled="!selectedSourceId"
+              @click="selectedSourceId && loadKnowledgeMaterials(selectedSourceId)"
+            >
+              刷新素材
+            </el-button>
+          </div>
+          <el-table :data="knowledgeMaterials" height="320">
+            <el-table-column prop="title" label="素材" min-width="220" />
             <el-table-column prop="materialType" label="类型" width="150" />
-            <el-table-column width="120">
+            <el-table-column prop="language" label="语言" width="100" />
+            <el-table-column width="130">
               <template #default="{ row }">
                 <el-button
                   size="small"
@@ -509,6 +548,8 @@ const selectedRuntimePayload = ref('')
 const runtimeEventViewMode = ref<'process' | 'all'>('process')
 const knowledgeStatus = ref('')
 const selectedSourceId = ref<number | undefined>()
+const materialImportMode = ref('video')
+const lastIngestionJob = ref<any | undefined>()
 const extractingMaterialId = ref<number | undefined>()
 const importingDouyin = ref(false)
 const uploadingDouyinVideo = ref(false)
@@ -554,6 +595,7 @@ const visibleRuntimeEvents = computed(() => runtimeEventViewMode.value === 'all'
   : runtimeEvents.value.filter(event => !NOISE_EVENT_TYPES.has(event.eventType))
 )
 const runtimeExecutions = computed(() => buildRuntimeExecutionSummaries(visibleRuntimeEvents.value))
+const selectedKnowledgeSource = computed(() => knowledgeSources.value.find(source => source.id === selectedSourceId.value))
 
 const runtimeEventStats = computed(() => {
   const sessions = new Set<string>()
@@ -763,12 +805,13 @@ async function importKnowledgeMaterial() {
     ElMessage.warning('请先选择或创建一个素材来源')
     return
   }
-  await unwrap(api.post(`/api/admin/knowledge-sources/${selectedSourceId.value}/materials`, {
+  const material = await unwrap<any>(api.post(`/api/admin/knowledge-sources/${selectedSourceId.value}/materials`, {
     materialType: materialForm.materialType,
     title: materialForm.title,
     content: materialForm.content,
     language: materialForm.language
   }))
+  lastIngestionJob.value = { sourceId: selectedSourceId.value, materialId: material.id, generatedKnowledgeId: '-' }
   materialForm.content = ''
   ElMessage.success('素材已导入')
   await loadKnowledgeMaterials(selectedSourceId.value)
@@ -777,6 +820,10 @@ async function importKnowledgeMaterial() {
 async function importDouyinVideo() {
   if (!douyinForm.videoUrl.trim()) {
     ElMessage.warning('请先填写抖音视频链接')
+    return
+  }
+  if (!douyinForm.notes.trim()) {
+    ElMessage.warning('链接导入需要粘贴字幕、摘要或调色步骤；只有视频文件请使用上传视频解析')
     return
   }
   importingDouyin.value = true
@@ -788,6 +835,8 @@ async function importDouyinVideo() {
       styleId: douyinForm.styleId || sourceForm.styleId,
       notes: douyinForm.notes
     }))
+    lastIngestionJob.value = job
+    selectedSourceId.value = job.sourceId
     ElMessage.success(`已生成待审核知识 #${job.generatedKnowledgeId}`)
     douyinForm.videoUrl = ''
     douyinForm.notes = ''
@@ -820,6 +869,8 @@ async function uploadDouyinVideo() {
     const styleId = douyinUploadForm.styleId || sourceForm.styleId
     if (styleId) formData.append('styleId', String(styleId))
     const job = await unwrap<any>(api.post('/api/admin/knowledge-sources/douyin-video-uploads', formData))
+    lastIngestionJob.value = job
+    selectedSourceId.value = job.sourceId
     ElMessage.success(`已生成待审核知识 #${job.generatedKnowledgeId}`)
     douyinVideoFile.value = undefined
     douyinUploadForm.notes = ''

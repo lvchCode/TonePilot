@@ -15,6 +15,7 @@ import com.tonepilot.infrastructure.ai.OpenAiCompatibleModelClient;
 import com.tonepilot.infrastructure.ai.dto.StyleKnowledgeModelOutput;
 import com.tonepilot.infrastructure.knowledge.catalog.KnowledgeCatalogJdbcRepository;
 import com.tonepilot.infrastructure.knowledge.douyin.DouyinTranscriptService;
+import com.tonepilot.infrastructure.knowledge.douyin.VideoFrameAnalysisService;
 import com.tonepilot.infrastructure.knowledge.douyin.VideoTranscriptService;
 import com.tonepilot.infrastructure.shared.persistence.DomainSnapshotRepository;
 import com.tonepilot.infrastructure.shared.persistence.InMemoryTonePilotStore;
@@ -47,6 +48,8 @@ public class KnowledgeMaterialIngestionService {
     private DouyinTranscriptService douyinTranscriptService;
     @Autowired
     private VideoTranscriptService videoTranscriptService;
+    @Autowired
+    private VideoFrameAnalysisService videoFrameAnalysisService;
     @Autowired
     private ObjectStorageService storageService;
     @Autowired
@@ -138,6 +141,8 @@ public class KnowledgeMaterialIngestionService {
             }
             String sourceTitle = trimOrDefault(title, "上传抖音调色教程");
             String transcript = videoTranscriptService.transcribeVideo(transcribePath, storedFile.fileName(), sourceTitle, author, notes);
+            String visualAnalysis = videoFrameAnalysisService.analyzeVideo(transcribePath, storedFile.fileName(), sourceTitle, notes);
+            String materialContent = mergeVideoMaterialContent(transcript, visualAnalysis);
             KnowledgeSource source = createSource(new KnowledgeSourceRequest(
                     "douyin_uploaded_video",
                     sourceTitle,
@@ -149,7 +154,7 @@ public class KnowledgeMaterialIngestionService {
             KnowledgeMaterial material = importMaterial(source.id(), new KnowledgeMaterialRequest(
                     "transcript",
                     source.title() + " 上传视频字幕/摘要",
-                    transcript,
+                    materialContent,
                     "zh-CN"
             ));
             return extractToKnowledge(source.id(), material.id());
@@ -304,6 +309,15 @@ public class KnowledgeMaterialIngestionService {
             );
         }
         return Map.of();
+    }
+
+    private String mergeVideoMaterialContent(String transcript, String visualAnalysis) {
+        String cleanedTranscript = trimOrDefault(transcript, "");
+        String cleanedVisualAnalysis = trimOrDefault(visualAnalysis, "");
+        if (cleanedVisualAnalysis.isBlank()) {
+            return cleanedTranscript;
+        }
+        return cleanedTranscript + "\n\n" + cleanedVisualAnalysis;
     }
 
     private String buildUploadedVideoNotes(String notes, StoredFile storedFile) {

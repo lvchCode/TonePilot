@@ -67,6 +67,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler({
             IllegalArgumentException.class,
+            IllegalStateException.class,
             ConstraintViolationException.class
     })
     public ResponseEntity<ApiResponse<Void>> handleBadRequest(RuntimeException exception) {

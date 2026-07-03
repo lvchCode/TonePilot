@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tonepilot.infrastructure.admin.data.mapper.AdminDataTableMapper">
+
+    <sql id="keywordWhere">
+        <where>
+            <if test="keyword != null and keyword != '' and searchableColumns != null and searchableColumns.size() > 0">
+                <foreach collection="searchableColumns" item="column" open="(" close=")" separator=" OR ">
+                    LOWER(${column}) LIKE #{keyword}
+                </foreach>
+            </if>
+        </where>
+    </sql>
+
+    <select id="countRows" parameterType="com.tonepilot.repository.admin.data.AdminDataCountQuery" resultType="long">
+        SELECT COUNT(*)
+        FROM ${tableName}
+        <include refid="keywordWhere"/>
+    </select>
+
+    <select id="listRows" parameterType="com.tonepilot.repository.admin.data.AdminDataListQuery" resultType="map">
+        SELECT ${columnSql}
+        FROM ${tableName}
+        <include refid="keywordWhere"/>
+        ORDER BY ${orderColumn} DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <insert id="insertRow" parameterType="com.tonepilot.repository.admin.data.AdminDataInsertCommand">
+        INSERT INTO ${tableName}
+        <foreach collection="columns" item="column" open="(" close=")" separator=",">
+            ${column}
+        </foreach>
+        VALUES
+        <foreach collection="values" item="value" open="(" close=")" separator=",">
+            #{value}
+        </foreach>
+    </insert>
+
+    <update id="updateRow" parameterType="com.tonepilot.repository.admin.data.AdminDataUpdateCommand">
+        UPDATE ${tableName}
+        <set>
+            <foreach collection="values" item="entry" separator=",">
+                ${entry.column} = #{entry.value}
+            </foreach>
+        </set>
+        WHERE ${primaryKey} = #{primaryValue}
+    </update>
+
+    <delete id="deleteRow" parameterType="com.tonepilot.repository.admin.data.AdminDataDeleteCommand">
+        DELETE FROM ${tableName}
+        WHERE ${primaryKey} = #{primaryValue}
+    </delete>
+
+    <select id="findByPrimaryKey" parameterType="com.tonepilot.repository.admin.data.AdminDataFindQuery" resultType="map">
+        SELECT ${columnSql}
+        FROM ${tableName}
+        WHERE ${primaryKey} = #{primaryValue}
+    </select>
+</mapper>

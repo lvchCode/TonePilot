@@ -30,5 +30,6 @@
         <java.version>17</java.version>
         <langchain4j.version>1.11.8</langchain4j.version>
         <minio.version>8.5.17</minio.version>
+        <mybatis.spring.boot.version>3.0.4</mybatis.spring.boot.version>
     </properties>
 </project>

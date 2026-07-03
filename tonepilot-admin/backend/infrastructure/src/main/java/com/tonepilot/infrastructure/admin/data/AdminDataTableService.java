@@ -1,8 +1,15 @@
 package com.tonepilot.infrastructure.admin.data;
 
+import com.tonepilot.repository.admin.data.AdminDataUpdateCommand;
+import com.tonepilot.repository.admin.data.AdminDataTableRepository;
+import com.tonepilot.repository.admin.data.AdminDataListQuery;
+import com.tonepilot.repository.admin.data.AdminDataInsertCommand;
+import com.tonepilot.repository.admin.data.AdminDataFindQuery;
+import com.tonepilot.repository.admin.data.AdminDataDeleteCommand;
+import com.tonepilot.repository.admin.data.AdminDataCountQuery;
+import com.tonepilot.repository.admin.data.AdminDataColumnValue;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.sql.Timestamp;
@@ -16,7 +23,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -26,13 +32,13 @@ public class AdminDataTableService {
     private static final int DEFAULT_SIZE = 20;
     private static final int MAX_SIZE = 100;
 
-    private final ObjectProvider<JdbcTemplate> jdbcTemplateProvider;
+    private final ObjectProvider<AdminDataTableRepository> repositoryProvider;
     private final List<TableGroup> groups;
     private final Map<String, TableDefinition> tableDefinitions;
 
     @Autowired
-    public AdminDataTableService(ObjectProvider<JdbcTemplate> jdbcTemplateProvider) {
-        this.jdbcTemplateProvider = jdbcTemplateProvider;
+    public AdminDataTableService(ObjectProvider<AdminDataTableRepository> repositoryProvider) {
+        this.repositoryProvider = repositoryProvider;
         this.groups = buildGroups();
         this.tableDefinitions = groups.stream()
                 .flatMap(group -> group.children().stream())
@@ -52,26 +58,22 @@ public class AdminDataTableService {
         TableDefinition table = table(tableName);
         int currentPage = Math.max(page, DEFAULT_PAGE);
         int currentSize = Math.max(1, Math.min(size <= 0 ? DEFAULT_SIZE : size, MAX_SIZE));
-        SqlWhere where = buildKeywordWhere(table, keyword);
-        List<Object> countArgs = new ArrayList<>(where.args());
-        Long total = jdbc().queryForObject(
-                "SELECT COUNT(*) FROM " + table.tableName() + where.sql(),
-                Long.class,
-                countArgs.toArray()
-        );
-        List<Object> args = new ArrayList<>(where.args());
-        args.add(currentSize);
-        args.add((currentPage - 1) * currentSize);
-        List<Map<String, Object>> rows = jdbc().queryForList("""
-                SELECT %s
-                FROM %s
-                %s
-                ORDER BY %s DESC
-                LIMIT ? OFFSET ?
-                """.formatted(columnList(table), table.tableName(), where.sql(), table.orderColumn()),
-                args.toArray()
-        ).stream().map(row -> normalizeRow(table, row)).toList();
-        return new TableRows(rows, total == null ? 0 : total, currentPage, currentSize);
+        String keywordPattern = keywordPattern(keyword);
+        long total = repository().countRows(new AdminDataCountQuery(
+                table.tableName(),
+                table.searchableColumns(),
+                keywordPattern
+        ));
+        List<Map<String, Object>> rows = repository().listRows(new AdminDataListQuery(
+                table.tableName(),
+                columnList(table),
+                table.orderColumn(),
+                table.searchableColumns(),
+                keywordPattern,
+                currentSize,
+                (currentPage - 1) * currentSize
+        )).stream().map(row -> normalizeRow(table, row)).toList();
+        return new TableRows(rows, total, currentPage, currentSize);
     }
 
     public Map<String, Object> createRow(String tableName, Map<String, Object> request) {
@@ -79,11 +81,10 @@ public class AdminDataTableService {
         Map<String, Object> values = sanitizeForWrite(table, request, true);
         ensureRequiredColumns(table, values);
         List<String> columns = new ArrayList<>(values.keySet());
-        String placeholders = columns.stream().map(column -> "?").collect(Collectors.joining(", "));
-        jdbc().update(
-                "INSERT INTO " + table.tableName() + " (" + String.join(", ", columns) + ") VALUES (" + placeholders + ")",
-                columns.stream().map(column -> convertValue(table.column(column), values.get(column))).toArray()
-        );
+        List<Object> writeValues = columns.stream()
+                .map(column -> convertValue(table.column(column), values.get(column)))
+                .collect(Collectors.toCollection(ArrayList::new));
+        repository().insertRow(new AdminDataInsertCommand(table.tableName(), columns, writeValues));
         return getByPrimaryKey(table, values.get(table.primaryKey()));
     }
 
@@ -93,17 +94,18 @@ public class AdminDataTableService {
         if (values.isEmpty()) {
             throw new IllegalArgumentException("没有可更新的字段");
         }
-        String setSql = values.keySet().stream()
-                .map(column -> column + " = ?")
-                .collect(Collectors.joining(", "));
-        List<Object> args = values.entrySet().stream()
-                .map(entry -> convertValue(table.column(entry.getKey()), entry.getValue()))
+        List<AdminDataColumnValue> writeValues = values.entrySet().stream()
+                .map(entry -> new AdminDataColumnValue(
+                        entry.getKey(),
+                        convertValue(table.column(entry.getKey()), entry.getValue())
+                ))
                 .collect(Collectors.toCollection(ArrayList::new));
-        args.add(convertPrimaryKey(table, rowKey));
-        int updated = jdbc().update(
-                "UPDATE " + table.tableName() + " SET " + setSql + " WHERE " + table.primaryKey() + " = ?",
-                args.toArray()
-        );
+        int updated = repository().updateRow(new AdminDataUpdateCommand(
+                table.tableName(),
+                writeValues,
+                table.primaryKey(),
+                convertPrimaryKey(table, rowKey)
+        ));
         if (updated == 0) {
             throw new IllegalArgumentException("未找到要更新的数据：" + rowKey);
         }
@@ -112,10 +114,11 @@ public class AdminDataTableService {
 
     public void deleteRow(String tableName, String rowKey) {
         TableDefinition table = editableTable(tableName);
-        int updated = jdbc().update(
-                "DELETE FROM " + table.tableName() + " WHERE " + table.primaryKey() + " = ?",
+        int updated = repository().deleteRow(new AdminDataDeleteCommand(
+                table.tableName(),
+                table.primaryKey(),
                 convertPrimaryKey(table, rowKey)
-        );
+        ));
         if (updated == 0) {
             throw new IllegalArgumentException("未找到要删除的数据：" + rowKey);
         }
@@ -125,12 +128,12 @@ public class AdminDataTableService {
         return table(tableName);
     }
 
-    private JdbcTemplate jdbc() {
-        JdbcTemplate jdbcTemplate = jdbcTemplateProvider.getIfAvailable();
-        if (jdbcTemplate == null) {
+    private AdminDataTableRepository repository() {
+        AdminDataTableRepository repository = repositoryProvider.getIfAvailable();
+        if (repository == null) {
             throw new IllegalStateException("当前未启用数据库连接，无法访问数据管理表");
         }
-        return jdbcTemplate;
+        return repository;
     }
 
     private TableDefinition table(String tableName) {
@@ -191,26 +194,23 @@ public class AdminDataTableService {
     }
 
     private Map<String, Object> getByPrimaryKey(TableDefinition table, Object primaryKey) {
-        List<Map<String, Object>> rows = jdbc().queryForList(
-                "SELECT " + columnList(table) + " FROM " + table.tableName() + " WHERE " + table.primaryKey() + " = ?",
+        Map<String, Object> row = repository().findByPrimaryKey(new AdminDataFindQuery(
+                table.tableName(),
+                columnList(table),
+                table.primaryKey(),
                 convertValue(table.column(table.primaryKey()), primaryKey)
-        );
-        if (rows.isEmpty()) {
+        ));
+        if (row == null || row.isEmpty()) {
             throw new IllegalArgumentException("未找到数据：" + primaryKey);
         }
-        return normalizeRow(table, rows.get(0));
+        return normalizeRow(table, row);
     }
 
-    private SqlWhere buildKeywordWhere(TableDefinition table, String keyword) {
-        if (keyword == null || keyword.isBlank() || table.searchableColumns().isEmpty()) {
-            return new SqlWhere("", List.of());
+    private String keywordPattern(String keyword) {
+        if (keyword == null || keyword.isBlank()) {
+            return null;
         }
-        String pattern = "%" + keyword.trim().toLowerCase() + "%";
-        String condition = table.searchableColumns().stream()
-                .map(column -> "LOWER(" + column + ") LIKE ?")
-                .collect(Collectors.joining(" OR "));
-        List<Object> args = table.searchableColumns().stream().map(column -> pattern).collect(Collectors.toList());
-        return new SqlWhere(" WHERE " + condition, args);
+        return "%" + keyword.trim().toLowerCase() + "%";
     }
 
     private Map<String, Object> normalizeRow(TableDefinition table, Map<String, Object> row) {
@@ -491,9 +491,6 @@ public class AdminDataTableService {
 
     private ColumnDefinition col(String name, String label, String type, boolean editable, boolean required, boolean primaryKey) {
         return new ColumnDefinition(name, label, type, editable, required, primaryKey);
-    }
-
-    private record SqlWhere(String sql, List<Object> args) {
     }
 
     public record TableGroup(String id, String label, String description, List<TableDefinition> children) {

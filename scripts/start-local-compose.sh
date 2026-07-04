@@ -65,11 +65,42 @@ export TONEPILOT_VECTOR_STORE="milvus"
 export MILVUS_URI="http://localhost:19530"
 export MILVUS_COLLECTION="tonepilot_knowledge"
 
+# 视频教程导入依赖：未显式配置时，优先使用 TonePilot 本地工具目录。
+# 仍可在 .env.local 中覆盖 TONEPILOT_VIDEO_FFMPEG_BIN、TONEPILOT_VIDEO_WHISPER_CPP_BIN 和 TONEPILOT_VIDEO_WHISPER_MODEL。
+TONEPILOT_LOCAL_TOOLS="${TONEPILOT_LOCAL_TOOLS:-${HOME}/.local/share/tonepilot}"
+default_ffmpeg="${TONEPILOT_LOCAL_TOOLS}/ffmpeg/ffmpeg"
+default_whisper_cli="${TONEPILOT_LOCAL_TOOLS}/whisper.cpp/build/bin/whisper-cli"
+default_whisper_model="${TONEPILOT_LOCAL_TOOLS}/models/ggml-small.bin"
+
+if [ -z "${TONEPILOT_VIDEO_FFMPEG_BIN:-}" ] && [ -x "${default_ffmpeg}" ]; then
+  export TONEPILOT_VIDEO_FFMPEG_BIN="${default_ffmpeg}"
+fi
+if [ -z "${TONEPILOT_VIDEO_WHISPER_CPP_BIN:-}" ] && [ -x "${default_whisper_cli}" ]; then
+  export TONEPILOT_VIDEO_WHISPER_CPP_BIN="${default_whisper_cli}"
+fi
+if [ -z "${TONEPILOT_VIDEO_WHISPER_MODEL:-}" ] && [ -f "${default_whisper_model}" ]; then
+  export TONEPILOT_VIDEO_WHISPER_MODEL="${default_whisper_model}"
+fi
+
+if [ ! -x "${TONEPILOT_VIDEO_FFMPEG_BIN:-ffmpeg}" ] && ! command -v "${TONEPILOT_VIDEO_FFMPEG_BIN:-ffmpeg}" >/dev/null 2>&1; then
+  echo "警告：未找到 ffmpeg。视频上传解析需要配置 TONEPILOT_VIDEO_FFMPEG_BIN。"
+fi
+if [ ! -x "${TONEPILOT_VIDEO_WHISPER_CPP_BIN:-whisper-cli}" ] && ! command -v "${TONEPILOT_VIDEO_WHISPER_CPP_BIN:-whisper-cli}" >/dev/null 2>&1; then
+  echo "警告：未找到 whisper-cli。视频上传解析需要配置 TONEPILOT_VIDEO_WHISPER_CPP_BIN。"
+fi
+if [ ! -f "${TONEPILOT_VIDEO_WHISPER_MODEL:-}" ]; then
+  echo "警告：未找到 whisper 模型。视频上传解析需要配置 TONEPILOT_VIDEO_WHISPER_MODEL。"
+fi
+
+echo "视频解析工具：ffmpeg=${TONEPILOT_VIDEO_FFMPEG_BIN:-ffmpeg}"
+echo "视频解析工具：whisper-cli=${TONEPILOT_VIDEO_WHISPER_CPP_BIN:-whisper-cli}"
+echo "视频解析工具：whisper-model=${TONEPILOT_VIDEO_WHISPER_MODEL:-未配置}"
+
 echo "安装管理端后端多模块依赖"
 mvn -q -DskipTests install
 
 : > "${BACKEND_LOG}"
-setsid nohup mvn -f starter/pom.xml spring-boot:run > "${BACKEND_LOG}" 2>&1 < /dev/null &
+nohup java -jar starter/target/tonepilot-admin-starter-0.1.0-SNAPSHOT.jar > "${BACKEND_LOG}" 2>&1 < /dev/null &
 echo "$!" > "${LOG_DIR}/backend-compose.pid"
 echo "后端启动中，日志：${BACKEND_LOG}"
 echo "后端进程 PID 文件：${LOG_DIR}/backend-compose.pid"

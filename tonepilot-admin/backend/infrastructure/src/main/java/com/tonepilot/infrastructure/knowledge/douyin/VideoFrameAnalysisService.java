@@ -44,7 +44,7 @@ public class VideoFrameAnalysisService {
     @Autowired
     private OpenAiCompatibleModelClient modelClient;
 
-    public String analyzeVideo(Path videoPath, String fileName, String title, String notes) {
+    public String analyzeVideo(Path videoPath, String fileName, String title, String notes, String transcriptContext) {
         if (!frameAnalysisEnabled) {
             return "";
         }
@@ -63,7 +63,7 @@ public class VideoFrameAnalysisService {
             }
             List<String> frameReports = new ArrayList<>();
             for (int i = 0; i < frames.size(); i++) {
-                frameReports.add(analyzeFrame(frames.get(i), i + 1, fileName, title, notes));
+                frameReports.add(analyzeFrame(frames.get(i), i + 1, fileName, title, notes, transcriptContext));
             }
             return buildAnalysisSection(frames, String.join("\n\n", frameReports));
         } catch (Exception exception) {
@@ -101,7 +101,7 @@ public class VideoFrameAnalysisService {
         }
     }
 
-    private String analyzeFrame(Path framePath, int index, String fileName, String title, String notes) {
+    private String analyzeFrame(Path framePath, int index, String fileName, String title, String notes, String transcriptContext) {
         String json = modelClient.completeVisionJson(
                 "你是 TonePilot 视频调色教程画面分析 Agent，只输出严格 JSON。",
                 """
@@ -114,8 +114,10 @@ public class VideoFrameAnalysisService {
                         视频文件：%s
                         视频标题：%s
                         管理员备注：%s
+                        时间戳字幕上下文：
+                        %s
                         关键帧序号：%d
-                        """.formatted(clean(fileName), clean(title), clean(notes), index),
+                        """.formatted(clean(fileName), clean(title), clean(notes), abbreviateTranscript(transcriptContext), index),
                 toDataUrl(framePath)
         );
         FrameVisionOutput output = modelClient.readJson(json, FrameVisionOutput.class);
@@ -198,6 +200,14 @@ public class VideoFrameAnalysisService {
         } catch (Exception ignored) {
             // 临时关键帧清理失败不影响导入结果。
         }
+    }
+
+    private String abbreviateTranscript(String value) {
+        String cleaned = clean(value);
+        if (cleaned.length() <= 2000) {
+            return cleaned;
+        }
+        return cleaned.substring(0, 2000) + "\n...（字幕较长，已截断用于关键帧分析）";
     }
 
     private String clean(String value) {

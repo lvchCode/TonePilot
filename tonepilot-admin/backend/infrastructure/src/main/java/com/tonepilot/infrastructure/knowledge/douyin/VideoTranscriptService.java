@@ -95,19 +95,28 @@ public class VideoTranscriptService {
                 "-m", Path.of(whisperModel).toAbsolutePath().normalize().toString(),
                 "-f", audioPath.toString(),
                 "-l", cleanOrDefault(language, "zh"),
+                "-osrt",
                 "-otxt",
                 "-of", outputPrefix.toString()
         ), "whisper.cpp 本地转写视频音频");
 
+        Path srtPath = Path.of(outputPrefix + ".srt");
+        if (Files.exists(srtPath)) {
+            try {
+                return normalizeSrt(Files.readString(srtPath, StandardCharsets.UTF_8));
+            } catch (Exception exception) {
+                throw new IllegalStateException("读取 whisper.cpp 时间戳字幕失败：" + exception.getMessage(), exception);
+            }
+        }
         Path textPath = Path.of(outputPrefix + ".txt");
         if (Files.exists(textPath)) {
             try {
-                return Files.readString(textPath, StandardCharsets.UTF_8).trim();
+                return normalizePlainTranscript(Files.readString(textPath, StandardCharsets.UTF_8));
             } catch (Exception exception) {
                 throw new IllegalStateException("读取 whisper.cpp 字幕文本失败：" + exception.getMessage(), exception);
             }
         }
-        return normalizeWhisperStdout(result.output());
+        return normalizePlainTranscript(normalizeWhisperStdout(result.output()));
     }
 
     private String normalizeWhisperStdout(String output) {
@@ -128,6 +137,65 @@ public class VideoTranscriptService {
             builder.append(cleaned);
         }
         return builder.toString().trim();
+    }
+
+    private String normalizeSrt(String srtText) {
+        StringBuilder builder = new StringBuilder();
+        String currentRange = "";
+        StringBuilder currentText = new StringBuilder();
+        for (String rawLine : srtText.split("\\R")) {
+            String line = rawLine.trim();
+            if (line.isBlank()) {
+                appendSubtitleLine(builder, currentRange, currentText.toString());
+                currentRange = "";
+                currentText.setLength(0);
+                continue;
+            }
+            if (line.matches("\\d+")) {
+                continue;
+            }
+            if (line.contains("-->")) {
+                appendSubtitleLine(builder, currentRange, currentText.toString());
+                currentText.setLength(0);
+                String[] parts = line.split("-->");
+                currentRange = formatTimestamp(parts[0]) + "-" + formatTimestamp(parts.length > 1 ? parts[1] : "");
+                continue;
+            }
+            if (!currentText.isEmpty()) {
+                currentText.append(' ');
+            }
+            currentText.append(line);
+        }
+        appendSubtitleLine(builder, currentRange, currentText.toString());
+        return builder.toString().trim();
+    }
+
+    private void appendSubtitleLine(StringBuilder builder, String range, String text) {
+        String cleaned = clean(text);
+        if (cleaned.isBlank()) {
+            return;
+        }
+        if (!builder.isEmpty()) {
+            builder.append('\n');
+        }
+        builder.append('[').append(clean(range).isBlank() ? "无时间戳" : clean(range)).append("] ").append(cleaned);
+    }
+
+    private String normalizePlainTranscript(String transcriptText) {
+        String cleaned = clean(transcriptText);
+        if (cleaned.isBlank()) {
+            return "";
+        }
+        if (cleaned.matches("(?s).*\\[[^\\]]*\\d{2}:\\d{2}[^\\]]*].*")) {
+            return cleaned;
+        }
+        return "[无时间戳] " + cleaned.replaceAll("\\R+", " ").trim();
+    }
+
+    private String formatTimestamp(String value) {
+        String cleaned = clean(value).replace(',', '.');
+        int spaceIndex = cleaned.indexOf(' ');
+        return spaceIndex >= 0 ? cleaned.substring(0, spaceIndex) : cleaned;
     }
 
     private ProcessResult runCommand(List<String> command, String action) {
@@ -172,8 +240,8 @@ public class VideoTranscriptService {
             builder.append("管理员备注：").append(input.notes()).append('\n');
         }
         builder.append('\n')
-                .append("字幕转写：").append('\n')
-                .append(transcriptText.trim());
+                .append("时间戳字幕：").append('\n')
+                .append(normalizePlainTranscript(transcriptText));
         return builder.toString();
     }
 

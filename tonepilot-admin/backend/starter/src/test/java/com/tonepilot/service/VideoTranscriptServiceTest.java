@@ -38,7 +38,7 @@ class VideoTranscriptServiceTest {
                   fi
                   shift || true
                 done
-                echo "先压低高光，再提高阴影，蓝色饱和度降低。" > "${output_prefix}.txt"
+                cat > "${output_prefix}.srt" <<SRT\n1\n00:00:00,000 --> 00:00:03,500\n先压低高光。\n\n2\n00:00:03,500 --> 00:00:07,000\n再提高阴影，蓝色饱和度降低。\nSRT\n
                 """);
 
         VideoTranscriptService service = new VideoTranscriptService();
@@ -56,8 +56,9 @@ class VideoTranscriptServiceTest {
         assertThat(transcript).contains("作者：调色博主");
         assertThat(transcript).contains("文件名：douyin.mp4");
         assertThat(transcript).contains("管理员备注：夜景蓝调");
-        assertThat(transcript).contains("字幕转写：");
-        assertThat(transcript).contains("先压低高光");
+        assertThat(transcript).contains("时间戳字幕：");
+        assertThat(transcript).contains("[00:00:00.000-00:00:03.500] 先压低高光。");
+        assertThat(transcript).contains("[00:00:03.500-00:00:07.000] 再提高阴影，蓝色饱和度降低。");
     }
 
     @Test
@@ -71,8 +72,8 @@ class VideoTranscriptServiceTest {
         String transcript = service.transcribeVideo(video, "douyin.mp4", "测试教程", "作者", "");
 
         assertThat(transcript).contains("视频标题：测试教程");
-        assertThat(transcript).contains("字幕转写：");
-        assertThat(transcript).contains("测试字幕：降低高光。");
+        assertThat(transcript).contains("时间戳字幕：");
+        assertThat(transcript).contains("[无时间戳] 测试字幕：降低高光。");
     }
 
     private Path executable(String fileName, String content) throws Exception {

@@ -141,7 +141,7 @@ public class KnowledgeMaterialIngestionService {
             }
             String sourceTitle = trimOrDefault(title, "上传抖音调色教程");
             String transcript = videoTranscriptService.transcribeVideo(transcribePath, storedFile.fileName(), sourceTitle, author, notes);
-            String visualAnalysis = videoFrameAnalysisService.analyzeVideo(transcribePath, storedFile.fileName(), sourceTitle, notes);
+            String visualAnalysis = videoFrameAnalysisService.analyzeVideo(transcribePath, storedFile.fileName(), sourceTitle, notes, transcript);
             String materialContent = mergeVideoMaterialContent(transcript, visualAnalysis);
             KnowledgeSource source = createSource(new KnowledgeSourceRequest(
                     "douyin_uploaded_video",

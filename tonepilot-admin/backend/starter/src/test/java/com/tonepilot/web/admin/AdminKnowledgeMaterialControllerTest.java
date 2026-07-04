@@ -21,7 +21,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest(classes = TonePilotApplication.class, properties = {
         "tonepilot.persistence.enabled=false",
         "tonepilot.rate-limit.enabled=false",
-        "tonepilot.ingestion.video.transcript-override=上传视频字幕：先压高光，再提高阴影，蓝色饱和度降低。",
+        "tonepilot.ingestion.video.transcript-override=[00:00:00.000-00:00:04.000] 先压高光。\\n[00:00:04.000-00:00:08.000] 再提高阴影，蓝色饱和度降低。",
         "tonepilot.ingestion.video.visual-analysis-override=关键帧视觉分析：画面是蓝调夜景，原片偏灰，教程展示了天空压暗、蓝色降低饱和度、曲线增加对比。",
         "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration"
 })
@@ -122,7 +122,10 @@ class AdminKnowledgeMaterialControllerTest {
                 .getResponse()
                 .getContentAsString(StandardCharsets.UTF_8);
         JsonNode materialsPayload = objectMapper.readTree(materialsResponse);
-        assertThat(materialsPayload.path("data").get(0).path("content").asText()).contains("关键帧视觉分析");
+        String materialContent = materialsPayload.path("data").get(0).path("content").asText();
+        assertThat(materialContent).contains("时间戳字幕：");
+        assertThat(materialContent).contains("[00:00:00.000-00:00:04.000] 先压高光。");
+        assertThat(materialContent).contains("关键帧视觉分析");
     }
 
     private JsonNode postJson(String url, String body) throws Exception {

@@ -7,7 +7,8 @@
     "dev": "vite --host 0.0.0.0",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview --host 0.0.0.0",
-    "test:observability": "node scripts/check-observability-ui.mjs"
+    "test:observability": "node scripts/check-observability-ui.mjs",
+    "test:materials-ui": "node scripts/check-material-source-hidden.mjs"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.1",

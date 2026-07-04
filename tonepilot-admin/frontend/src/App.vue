@@ -165,72 +165,18 @@
         </div>
       </section>
 
-      <section v-if="activeView === 'materials'" class="grid materials-grid">
-        <div class="panel source-panel">
-          <div class="panel-title">
-            <h3>素材来源</h3>
-            <el-button :icon="Plus" type="primary" @click="createKnowledgeSource">保存来源</el-button>
-          </div>
-
-          <el-form label-position="top">
-            <el-form-item label="来源类型">
-              <el-select v-model="sourceForm.sourceType">
-                <el-option label="抖音调色教程" value="douyin_video" />
-                <el-option label="大师调色记录" value="master_edit_record" />
-                <el-option label="手工笔记" value="manual_note" />
-                <el-option label="风格样片" value="style_sample" />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="来源标题">
-              <el-input v-model="sourceForm.title" placeholder="例如：夜景电影感调色教程" />
-            </el-form-item>
-            <el-form-item label="作者">
-              <el-input v-model="sourceForm.author" placeholder="教程作者或摄影师" />
-            </el-form-item>
-            <el-form-item label="原始链接">
-              <el-input v-model="sourceForm.originalUrl" placeholder="抖音链接、作品链接或记录来源" />
-            </el-form-item>
-            <el-form-item label="关联风格">
-              <el-select v-model="sourceForm.styleId" clearable placeholder="可选">
-                <el-option
-                  v-for="style in styles"
-                  :key="style.id"
-                  :label="style.styleName"
-                  :value="style.id"
-                />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="备注">
-              <el-input v-model="sourceForm.notes" type="textarea" :rows="3" placeholder="来源背景、账号信息、适合沉淀的调色方向" />
-            </el-form-item>
-          </el-form>
-
-          <el-divider />
-
-          <div class="panel-title compact">
-            <h3>来源列表</h3>
-            <el-button :icon="Refresh" @click="loadKnowledgeSources">刷新</el-button>
-          </div>
-          <el-table :data="knowledgeSources" height="260" highlight-current-row @row-click="selectKnowledgeSource">
-            <el-table-column prop="title" label="来源" min-width="180" />
-            <el-table-column prop="sourceType" label="类型" width="150" />
-            <el-table-column prop="author" label="作者" width="120" />
-          </el-table>
-        </div>
-
+      <section v-if="activeView === 'materials'" class="grid two">
         <div class="panel import-panel">
           <div class="panel-title">
-            <h3>导入工作台</h3>
-            <el-tag v-if="selectedKnowledgeSource" effect="plain">
-              当前来源：{{ selectedKnowledgeSource.title }}
-            </el-tag>
+            <h3>调色素材导入</h3>
+            <el-button :icon="Refresh" @click="loadKnowledgeSources">刷新记录</el-button>
           </div>
 
           <el-alert
             class="inline-alert"
             type="info"
             :closable="false"
-            title="推荐上传视频文件：系统会抽音频转字幕，并抽关键帧做视觉分析；只有抖音链接时，请同时粘贴字幕、摘要或调色步骤。"
+            title="推荐上传视频文件：系统会抽音频转字幕，并抽关键帧做视觉分析；只有抖音链接时，请同时粘贴字幕、摘要或调色步骤。导入时会自动保留作者、链接和备注用于追溯。"
           />
 
           <el-tabs v-model="materialImportMode" class="material-tabs">
@@ -255,6 +201,16 @@
                     <el-input v-model="douyinUploadForm.author" placeholder="可选" />
                   </el-form-item>
                 </div>
+                <el-form-item label="关联风格">
+                  <el-select v-model="douyinUploadForm.styleId" clearable placeholder="可选">
+                    <el-option
+                      v-for="style in styles"
+                      :key="style.id"
+                      :label="style.styleName"
+                      :value="style.id"
+                    />
+                  </el-select>
+                </el-form-item>
                 <el-form-item label="备注">
                   <el-input v-model="douyinUploadForm.notes" type="textarea" :rows="4" placeholder="账号、期数、你希望保留的调色要点" />
                 </el-form-item>
@@ -277,6 +233,16 @@
                     <el-input v-model="douyinForm.author" placeholder="可选" />
                   </el-form-item>
                 </div>
+                <el-form-item label="关联风格">
+                  <el-select v-model="douyinForm.styleId" clearable placeholder="可选">
+                    <el-option
+                      v-for="style in styles"
+                      :key="style.id"
+                      :label="style.styleName"
+                      :value="style.id"
+                    />
+                  </el-select>
+                </el-form-item>
                 <el-form-item label="字幕 / 摘要 / 调色步骤">
                   <el-input v-model="douyinForm.notes" type="textarea" :rows="6" placeholder="必须填写：粘贴视频字幕、调色步骤或教程摘要；只贴链接无法获取画面和音频。" />
                 </el-form-item>
@@ -288,18 +254,41 @@
 
             <el-tab-pane label="手工素材" name="manual">
               <el-form label-position="top">
-                <el-form-item label="素材类型">
-                  <el-select v-model="materialForm.materialType">
-                    <el-option label="字幕/转写文本" value="transcript" />
-                    <el-option label="教程摘要" value="summary" />
-                    <el-option label="Lightroom 参数" value="lightroom_params" />
-                    <el-option label="参数变化记录" value="param_delta" />
-                    <el-option label="XMP 片段" value="xmp" />
-                    <el-option label="手工文本" value="manual_text" />
-                  </el-select>
+                <div class="form-row">
+                  <el-form-item label="素材标题">
+                    <el-input v-model="materialForm.title" placeholder="例如：蓝调忧郁感调色步骤" />
+                  </el-form-item>
+                  <el-form-item label="素材类型">
+                    <el-select v-model="materialForm.materialType">
+                      <el-option label="字幕/转写文本" value="transcript" />
+                      <el-option label="教程摘要" value="summary" />
+                      <el-option label="Lightroom 参数" value="lightroom_params" />
+                      <el-option label="参数变化记录" value="param_delta" />
+                      <el-option label="XMP 片段" value="xmp" />
+                      <el-option label="手工文本" value="manual_text" />
+                    </el-select>
+                  </el-form-item>
+                </div>
+                <div class="form-row">
+                  <el-form-item label="作者">
+                    <el-input v-model="materialForm.author" placeholder="可选" />
+                  </el-form-item>
+                  <el-form-item label="关联风格">
+                    <el-select v-model="materialForm.styleId" clearable placeholder="可选">
+                      <el-option
+                        v-for="style in styles"
+                        :key="style.id"
+                        :label="style.styleName"
+                        :value="style.id"
+                      />
+                    </el-select>
+                  </el-form-item>
+                </div>
+                <el-form-item label="原始链接">
+                  <el-input v-model="materialForm.originalUrl" placeholder="可选：教程链接、作品链接或记录位置" />
                 </el-form-item>
-                <el-form-item label="素材标题">
-                  <el-input v-model="materialForm.title" placeholder="例如：第 1 段字幕摘要" />
+                <el-form-item label="备注">
+                  <el-input v-model="materialForm.notes" type="textarea" :rows="3" placeholder="账号、期数、教程背景或需要重点保留的调色方向" />
                 </el-form-item>
                 <el-form-item label="语言">
                   <el-input v-model="materialForm.language" />
@@ -307,21 +296,22 @@
                 <el-form-item label="素材内容">
                   <el-input v-model="materialForm.content" type="textarea" :rows="8" placeholder="粘贴字幕、教程摘要、调色参数或 XMP 内容" />
                 </el-form-item>
-                <el-button :icon="Upload" type="primary" @click="importKnowledgeMaterial">导入到当前来源</el-button>
+                <el-button :icon="Upload" type="primary" @click="importKnowledgeMaterial">导入手工素材</el-button>
               </el-form>
             </el-tab-pane>
           </el-tabs>
 
           <div v-if="lastIngestionJob" class="ingestion-result">
             <strong>最近导入</strong>
-            <span>来源 #{{ lastIngestionJob.sourceId }} / 素材 #{{ lastIngestionJob.materialId }}</span>
-            <span>已生成待审核知识 #{{ lastIngestionJob.generatedKnowledgeId }}</span>
+            <span>素材 #{{ lastIngestionJob.materialId }}</span>
+            <span v-if="lastIngestionJob.generatedKnowledgeId !== '-'">已生成待审核知识 #{{ lastIngestionJob.generatedKnowledgeId }}</span>
+            <span v-else>可在右侧素材记录中生成知识</span>
           </div>
         </div>
 
         <div class="panel materials-panel">
           <div class="panel-title">
-            <h3>当前来源素材</h3>
+            <h3>素材记录</h3>
             <el-button
               :icon="Refresh"
               :disabled="!selectedSourceId"
@@ -330,7 +320,7 @@
               刷新素材
             </el-button>
           </div>
-          <el-table :data="knowledgeMaterials" height="320">
+          <el-table :data="knowledgeMaterials" height="520">
             <el-table-column prop="title" label="素材" min-width="220" />
             <el-table-column prop="materialType" label="类型" width="150" />
             <el-table-column prop="language" label="语言" width="100" />
@@ -778,7 +768,6 @@ const visibleRuntimeEvents = computed(() => runtimeEventViewMode.value === 'all'
   : runtimeEvents.value.filter(event => !NOISE_EVENT_TYPES.has(event.eventType))
 )
 const runtimeExecutions = computed(() => buildRuntimeExecutionSummaries(visibleRuntimeEvents.value))
-const selectedKnowledgeSource = computed(() => knowledgeSources.value.find(source => source.id === selectedSourceId.value))
 
 const activeMenuIndex = computed(() => activeView.value === 'data' && activeDataTableName.value
   ? `data:${activeDataTableName.value}`
@@ -822,18 +811,13 @@ const knowledgeForm = reactive({
   strategy: '降低高光保留灯牌细节\n轻微提升阴影恢复暗部\n增加对比和去朦胧\n降低绿色饱和度并增加暗角聚焦'
 })
 
-const sourceForm = reactive({
-  sourceType: 'douyin_video',
-  title: '夜景电影感调色教程',
-  author: '',
-  originalUrl: '',
-  styleId: undefined as number | undefined,
-  notes: ''
-})
-
 const materialForm = reactive({
   materialType: 'transcript',
   title: '字幕摘要',
+  author: '',
+  originalUrl: '',
+  notes: '',
+  styleId: undefined as number | undefined,
   content: '',
   language: 'zh-CN'
 })
@@ -870,7 +854,7 @@ const pageTitle = computed(() => {
 
 const pageSubtitle = computed(() => {
   if (activeView.value === 'knowledge') return '维护 Agent 可检索的场景策略、参数经验和审核状态'
-  if (activeView.value === 'materials') return '登记抖音教程、大师调色记录、手工笔记等来源，并抽取成待审核知识'
+  if (activeView.value === 'materials') return '上传视频、粘贴教程或导入手工记录，抽取成可审核的调色知识'
   if (activeView.value === 'samples') return '上传管理员样片，分析风格并生成可审核知识'
   if (activeView.value === 'observability') return '追踪本地运行时用户输入、Agent 决策、大模型回复和 Lightroom 工具调用'
   if (activeView.value === 'data') return activeDataTable.value?.description || '按树形菜单查看和维护管理端数据表'
@@ -1003,7 +987,6 @@ function dataColumnWidth(column: DataColumn) {
 
 function selectStyle(row: any) {
   sampleForm.styleId = row.id
-  sourceForm.styleId = row.id
   douyinForm.styleId = row.id
   douyinUploadForm.styleId = row.id
 }
@@ -1072,18 +1055,24 @@ async function disableKnowledge(id: number) {
   await loadAdminKnowledge()
 }
 
-async function createKnowledgeSource() {
+async function createInternalKnowledgeSource(payload: {
+  sourceType: string
+  title: string
+  author?: string
+  originalUrl?: string
+  styleId?: number
+  notes?: string
+}) {
   const source = await unwrap<any>(api.post('/api/admin/knowledge-sources', {
-    sourceType: sourceForm.sourceType,
-    title: sourceForm.title,
-    author: sourceForm.author,
-    originalUrl: sourceForm.originalUrl,
-    styleId: sourceForm.styleId,
-    notes: sourceForm.notes
+    sourceType: payload.sourceType,
+    title: payload.title,
+    author: payload.author || '',
+    originalUrl: payload.originalUrl || '',
+    styleId: payload.styleId,
+    notes: payload.notes || ''
   }))
   selectedSourceId.value = source.id
-  ElMessage.success('素材来源已保存')
-  await loadKnowledgeSources()
+  return source
 }
 
 async function loadKnowledgeSources() {
@@ -1093,13 +1082,9 @@ async function loadKnowledgeSources() {
   }
   if (selectedSourceId.value) {
     await loadKnowledgeMaterials(selectedSourceId.value)
+  } else {
+    knowledgeMaterials.value = []
   }
-}
-
-async function selectKnowledgeSource(row: any) {
-  selectedSourceId.value = row.id
-  sourceForm.styleId = row.styleId
-  await loadKnowledgeMaterials(row.id)
 }
 
 async function loadKnowledgeMaterials(sourceId: number) {
@@ -1107,20 +1092,28 @@ async function loadKnowledgeMaterials(sourceId: number) {
 }
 
 async function importKnowledgeMaterial() {
-  if (!selectedSourceId.value) {
-    ElMessage.warning('请先选择或创建一个素材来源')
+  if (!materialForm.content.trim()) {
+    ElMessage.warning('请先填写素材内容')
     return
   }
-  const material = await unwrap<any>(api.post(`/api/admin/knowledge-sources/${selectedSourceId.value}/materials`, {
+  const source = await createInternalKnowledgeSource({
+    sourceType: 'manual_note',
+    title: materialForm.title || '手工调色素材',
+    author: materialForm.author,
+    originalUrl: materialForm.originalUrl,
+    styleId: materialForm.styleId,
+    notes: materialForm.notes
+  })
+  const material = await unwrap<any>(api.post(`/api/admin/knowledge-sources/${source.id}/materials`, {
     materialType: materialForm.materialType,
     title: materialForm.title,
     content: materialForm.content,
     language: materialForm.language
   }))
-  lastIngestionJob.value = { sourceId: selectedSourceId.value, materialId: material.id, generatedKnowledgeId: '-' }
+  lastIngestionJob.value = { sourceId: source.id, materialId: material.id, generatedKnowledgeId: '-' }
   materialForm.content = ''
   ElMessage.success('素材已导入')
-  await loadKnowledgeMaterials(selectedSourceId.value)
+  await loadKnowledgeMaterials(source.id)
 }
 
 async function importDouyinVideo() {
@@ -1138,7 +1131,7 @@ async function importDouyinVideo() {
       videoUrl: douyinForm.videoUrl,
       title: douyinForm.title,
       author: douyinForm.author,
-      styleId: douyinForm.styleId || sourceForm.styleId,
+      styleId: douyinForm.styleId,
       notes: douyinForm.notes
     }, { timeout: 0 }))
     lastIngestionJob.value = job
@@ -1180,7 +1173,7 @@ async function uploadDouyinVideo() {
     formData.append('title', douyinUploadForm.title)
     formData.append('author', douyinUploadForm.author)
     formData.append('notes', douyinUploadForm.notes)
-    const styleId = douyinUploadForm.styleId || sourceForm.styleId
+    const styleId = douyinUploadForm.styleId
     if (styleId) formData.append('styleId', String(styleId))
     const job = await unwrap<any>(api.post('/api/admin/knowledge-sources/douyin-video-uploads', formData, { timeout: 0 }))
     lastIngestionJob.value = job
